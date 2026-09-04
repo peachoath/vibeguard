@@ -60,21 +60,24 @@ Agent Runner를 Spring Boot에서 분리한 이유와 서브에이전트 MCP 제
 
 ## 시작하기
 
-### 0. 인프라 / 환경변수
+### 0. 환경변수
 
-DB는 **Supabase 관리형 PostgreSQL 16**을 사용합니다.
+`.env`는 **각 컴포넌트 폴더 안**에 둡니다(루트 통합 `.env` 없음 — 각 런타임이 자기 폴더만 읽습니다). 각 폴더의 `.env.example`을 `.env`로 복사해 채우세요.
+
+| 위치 | 담는 값 | 읽는 주체 |
+|---|---|---|
+| `BE/api-server/.env` | DB(Supabase), GitHub OAuth, 콜백 시크릿 | Spring Boot (부팅 시 자동 로드) |
+| `BE/agent/.env` | `ANTHROPIC_API_KEY`, `NVD_API_KEY`, 런너 설정 | Node 런너 |
+| `FE/.env` | `VITE_*` (선택) | Vite |
 
 ```bash
-cp .env.example .env
-# .env 채우기:
-#  - DB_URL/DB_USER/DB_PASSWORD → Supabase Dashboard의 Connection string
-#    (Supavisor 세션 풀러, 포트 5432, sslmode=require)
-#  - GITHUB_CLIENT_ID/SECRET, ANTHROPIC_API_KEY 등
+cp BE/api-server/.env.example BE/api-server/.env   # DB는 Supabase Connect의 JDBC(Session pooler) 값
+cp BE/agent/.env.example      BE/agent/.env
 ```
 
-> 스키마는 앱 부팅 시 Flyway가 Supabase에 자동 마이그레이션합니다.
+> DB는 **Supabase 관리형 PostgreSQL 16**. 스키마는 Spring Boot 부팅 시 Flyway가 자동 마이그레이션합니다.
 > 오프라인 로컬 개발이 필요하면 `docker compose up -d postgres`로 로컬 Postgres를 띄우고
-> `.env`의 로컬 `DB_URL` 주석을 활성화하세요.
+> `BE/api-server/.env`의 로컬 `DB_URL` 주석을 활성화하세요.
 
 ### 1. FE (웹)
 
