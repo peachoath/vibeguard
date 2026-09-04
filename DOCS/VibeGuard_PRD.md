@@ -128,7 +128,7 @@ Vibe Coding 환경에서 코드 생산 속도는 폭발적으로 늘었지만, �
 │  API Server   Spring Boot 4.0.x / Java 21                │
 │  ├ Spring Security + OAuth2 Client (GitHub)              │
 │  ├ Scan Orchestration (상태머신)                          │
-│  ├ Spring Data JPA + Flyway → PostgreSQL 16              │
+│  ├ Spring Data JPA + Flyway → Supabase PostgreSQL 16     │
 │  └ SSE Emitter Hub                                        │
 └───────────────┬──────────────────────────────────────────┘
                 │ HTTP (작업 위임) ↕ Webhook (이벤트 콜백)
@@ -471,7 +471,7 @@ users ──< repositories ──< scans ──< findings ──< patches ──
 | Framework | **Spring Boot 4.0.x** | 요구 스택. 현재 안정 GA 브랜치이며 Spring Framework 7 기반 |
 | Runtime | **Java 21 (LTS)** | Spring Boot 4는 Java 17 이상 요구. LTS 안정성 우선 |
 | Build | Gradle (Kotlin DSL) | |
-| DB | PostgreSQL 16 | jsonb로 에이전트 출력 유연 저장 |
+| DB | **Supabase PostgreSQL 16** (관리형) | jsonb로 에이전트 출력 유연 저장. 관리형이라 백업·커넥션 풀링(Supavisor)·SSL 기본 제공, 인프라 운영 부담 최소 |
 | ORM | Spring Data JPA + QueryDSL | |
 | Migration | Flyway | |
 | Auth | Spring Security + OAuth2 Client | |
@@ -480,6 +480,8 @@ users ──< repositories ──< scans ──< findings ──< patches ──
 | Test | JUnit 5 + Testcontainers + MockMvc | |
 
 > Spring Boot 3.5.x(3.5.16)는 OSS 지원이 2026년 6월 30일 종료되었고, 3.4는 이미 EOL입니다. 신규 프로젝트는 4.0.x가 정답입니다. 팀 내 라이브러리 호환 이슈가 크게 터지면 3.5.x로 폴백하되, 대회 종료 후 마이그레이션 부채가 남는다는 점을 인지하고 결정하세요.
+
+> **DB 호스팅 — Supabase 관리형 PostgreSQL 16.** Supabase는 여기서 **관리형 Postgres로만** 사용합니다(Auth·Storage·RLS 미사용 — 인증은 Spring Security + GitHub OAuth 유지, 스키마는 동일하게 Flyway로 관리). 앱은 Supavisor **세션 풀러(포트 5432)** 로 접속하고 SSL(`sslmode=require`)을 강제합니다. 트랜잭션 풀러(6543)는 Flyway 마이그레이션·프리페어드 스테이트먼트와 상성이 나빠 피합니다. 로컬 완전 오프라인 개발이 필요할 때만 `docker-compose`의 로컬 Postgres로 폴백합니다.
 
 ### Agent / Infra
 | 항목 | 선택 |

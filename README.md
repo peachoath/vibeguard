@@ -49,7 +49,7 @@ Agent Runner를 Spring Boot에서 분리한 이유와 서브에이전트 MCP 제
 | 티어 | 스택 |
 |---|---|
 | **FE** | React 19 · TypeScript 5 · Vite · TanStack Query v5 · Zustand · Tailwind v4 + shadcn/ui · Vitest + Testing Library + MSW |
-| **BE/api-server** | Spring Boot 4.0.8 · Java 21 · Gradle (Kotlin DSL) · Spring Security + OAuth2 · Spring Data JPA + QueryDSL · Flyway · PostgreSQL 16 · springdoc-openapi |
+| **BE/api-server** | Spring Boot 4.0.8 · Java 21 · Gradle (Kotlin DSL) · Spring Security + OAuth2 · Spring Data JPA + QueryDSL · Flyway · **Supabase PostgreSQL 16** · springdoc-openapi |
 | **BE/agent** | Node 22 · TypeScript · `@anthropic-ai/claude-agent-sdk` · `@modelcontextprotocol/sdk` · zod · Express |
 
 ---
@@ -60,12 +60,21 @@ Agent Runner를 Spring Boot에서 분리한 이유와 서브에이전트 MCP 제
 
 ## 시작하기
 
-### 0. 인프라
+### 0. 인프라 / 환경변수
+
+DB는 **Supabase 관리형 PostgreSQL 16**을 사용합니다.
 
 ```bash
-docker compose up -d postgres        # PostgreSQL 16
-cp .env.example .env                 # 값 채우기 (GitHub OAuth, ANTHROPIC_API_KEY 등)
+cp .env.example .env
+# .env 채우기:
+#  - DB_URL/DB_USER/DB_PASSWORD → Supabase Dashboard의 Connection string
+#    (Supavisor 세션 풀러, 포트 5432, sslmode=require)
+#  - GITHUB_CLIENT_ID/SECRET, ANTHROPIC_API_KEY 등
 ```
+
+> 스키마는 앱 부팅 시 Flyway가 Supabase에 자동 마이그레이션합니다.
+> 오프라인 로컬 개발이 필요하면 `docker compose up -d postgres`로 로컬 Postgres를 띄우고
+> `.env`의 로컬 `DB_URL` 주석을 활성화하세요.
 
 ### 1. FE (웹)
 

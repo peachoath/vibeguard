@@ -2,6 +2,11 @@ spring:
   application:
     name: vibeguard-api
 
+  # DB: Supabase 관리형 PostgreSQL 16 (PRD §12).
+  # 운영/공유 개발은 Supavisor 세션 풀러(포트 5432) + sslmode=require 로 접속.
+  #   DB_URL  예) jdbc:postgresql://aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+  #   DB_USER 예) postgres.<project-ref>
+  # 아래 기본값은 로컬 docker-compose 폴백용입니다(오프라인 개발 시에만).
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/vibeguard}
     username: ${DB_USER:vibeguard}
