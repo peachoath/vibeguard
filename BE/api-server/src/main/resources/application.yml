@@ -32,10 +32,15 @@ spring:
           github:
             client-id: ${GITHUB_CLIENT_ID:changeme}
             client-secret: ${GITHUB_CLIENT_SECRET:changeme}
-            scope: read:user,repo
+            # 로그인에 필요한 최소 스코프. 리포 스캔(F-02)이 붙을 때 repo 추가 예정.
+            scope: read:user,user:email
 
-# Agent Runner callback (HMAC-signed) — see PRD NFR-S4
 vibeguard:
+  # GitHub access token 암호화 키 (AES-256-GCM, NFR-S3). base64 인코딩된 32바이트.
+  # 운영에서는 반드시 TOKEN_ENC_KEY 환경변수로 교체하세요.
+  security:
+    token-key: ${TOKEN_ENC_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
+  # Agent Runner callback (HMAC-signed) — see PRD NFR-S4
   runner:
     base-url: ${RUNNER_BASE_URL:http://localhost:4000}
     callback-secret: ${RUNNER_CALLBACK_SECRET:dev-secret-change-me}
