@@ -1,0 +1,18 @@
+{
+  "name": "vibeguard-agent",
+  "private": true,
+  "version": "0.0.0",
+  "description": "VibeGuard Agent tier — Claude Agent SDK runner + self-made MCP servers",
+  "type": "module",
+  "workspaces": [
+    "runner",
+    "mcp/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:runner": "npm run dev --workspace @vibeguard/runner"
+  }
+}

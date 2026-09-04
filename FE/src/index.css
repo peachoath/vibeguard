@@ -1,0 +1,37 @@
+@import 'tailwindcss';
+
+/*
+ * VibeGuard — Dark Security Console 테마 (PRD §8.2)
+ * 심각도 색상은 접근성 대비 확보:
+ *   Critical #E5484D / High #F76B15 / Medium #F5D90A / Low #3E9B4F
+ * UI 폰트: Pretendard / 코드·로그: JetBrains Mono
+ */
+@theme {
+  --color-bg: #0b0e14;
+  --color-surface: #12161f;
+  --color-border: #1e2430;
+  --color-fg: #e6e9ef;
+  --color-muted: #8b93a7;
+
+  --color-severity-critical: #e5484d;
+  --color-severity-high: #f76b15;
+  --color-severity-medium: #f5d90a;
+  --color-severity-low: #3e9b4f;
+
+  --font-sans: 'Pretendard', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}

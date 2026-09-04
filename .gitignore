@@ -1,0 +1,29 @@
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Env / secrets ----
+.env
+.env.local
+*.local
+
+# ---- Node (FE, BE/agent) ----
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+coverage/
+.vite/
+npm-debug.log*
+yarn-error.log*
+
+# ---- Java / Gradle (BE/api-server) ----
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+*.class
+
+# ---- IDE ----
+.idea/
+.vscode/
+*.iml

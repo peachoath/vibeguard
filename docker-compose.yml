@@ -1,0 +1,39 @@
+# VibeGuard — 로컬 개발용 인프라 (PRD §12: 데모는 단일 VM + Docker Compose)
+# 현재는 PostgreSQL만 기동합니다. api-server / agent-runner 서비스는
+# 각 Dockerfile 작성 후 (W1 후반) 주석을 해제해 통합합니다.
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: vibeguard-postgres
+    environment:
+      POSTGRES_DB: vibeguard
+      POSTGRES_USER: vibeguard
+      POSTGRES_PASSWORD: vibeguard
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U vibeguard']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # api-server:
+  #   build: ./BE/api-server
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   environment:
+  #     DB_URL: jdbc:postgresql://postgres:5432/vibeguard
+  #   ports: ['8080:8080']
+
+  # agent-runner:
+  #   build: ./BE/agent
+  #   environment:
+  #     ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+  #   ports: ['4000:4000']
+
+volumes:
+  pgdata:
