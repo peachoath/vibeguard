@@ -44,7 +44,9 @@ dependencies {
     annotationProcessor("jakarta.annotation:jakarta.annotation-api")
 
     // Migration / DB
-    implementation("org.flywaydb:flyway-core")
+    // Boot 4는 Flyway 자동설정을 별도 모듈로 분리 → spring-boot-flyway 필요
+    // (flyway-core는 이 모듈이 전이 의존으로 가져옴)
+    implementation("org.springframework.boot:spring-boot-flyway")
     runtimeOnly("org.flywaydb:flyway-database-postgresql")
     runtimeOnly("org.postgresql:postgresql")
 
