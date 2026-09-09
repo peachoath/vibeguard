@@ -229,9 +229,9 @@ users ─< repositories ─< scans ─< findings ─< patches ─< test_runs
 | Agent Runner `/health`,`/scans` | 뼈대만 |
 | MCP 3종(scanner/advisory/testrunner) | **전부 stub** (`not implemented`) |
 | repositories/scans/findings/dashboard API, SSE, HMAC 콜백 | 미구현 |
-| 실제 스캔·검증·패치·PR 파이프라인 | 미구현 (W2~W5 핵심) |
+| 실제 스캔·검증·패치·PR 파이프라인 | 미구현 (W1 중반~W2 중반 핵심) |
 
-**마일스톤:** W1 기반 → W2 탐지 → W3 검증 → **W4 패치+TDD(성패 결정)** → W5 PR+SSE → W6 완성도.
+**마일스톤 (2주 = 14일):** W1 전반(D1~2) 기반 → W1 중반(D3~4) 탐지 → W1 후반(D5) 검증 → **W2 전반(D6~9) 패치+TDD(성패 결정)** → W2 중반(D10~11) PR+SSE → W2 후반(D12~14) 완성도.
 
 ---
 

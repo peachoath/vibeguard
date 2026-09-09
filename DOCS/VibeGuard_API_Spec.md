@@ -396,8 +396,8 @@ Agent Runner가 파이프라인 이벤트를 서버로 전달. **HMAC-SHA256 서
 | 엔드포인트 | 상태 |
 |---|---|
 | OAuth 로그인 / `/auth/me` / `/auth/logout` | 구현됨 (`AuthController`, `SecurityConfig`, `CustomOAuth2UserService`) |
-| repositories / scans / findings / dashboard | 미구현 (PRD §7 마일스톤 W2~W6) |
-| SSE `/scans/{id}/stream` | 미구현 (W5) |
-| `/internal/runner/events` (HMAC) | ⏳ 미구현 (W2~) |
+| repositories / scans / findings / dashboard | 미구현 (PRD §14 마일스톤 W1 중반~W2 후반) |
+| SSE `/scans/{id}/stream` | 미구현 (W2 중반, D10~11) |
+| `/internal/runner/events` (HMAC) | 미구현 (W1 중반~, D3 이후) |
 
 > 스키마·enum은 [PRD §6·§9·§10](./VibeGuard_PRD.md), 흐름은 [Architecture §4·§5](./VibeGuard_Architecture.md) 참조. 확정 스펙 원천은 배포 후 `/v3/api-docs`(OpenAPI)이며, 본 문서와 불일치 시 OpenAPI를 우선한다.
