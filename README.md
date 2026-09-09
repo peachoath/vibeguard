@@ -1,10 +1,51 @@
-# 🛡️ VibeGuard
+<img src="./DOCS/assets/logo.svg" alt="VibeGuard" height="48">
+
+# VibeGuard
 
 > AI가 생성한 코드의 보안 취약점을 탐지하고, **TDD 기반으로 "수정되었음을 증명"한** 패치를 GitHub PR로 제안하는 Multi-Agent 시스템.
 
 GitHub 리포지토리를 연결하면 AI 에이전트가 **취약점을 탐지하고 → 취약함을 증명하는 테스트를 먼저 작성하고(FAIL) → 패치한 뒤 → 같은 테스트가 통과함을 증명하고(PASS) → 회귀 테스트까지 통과시킨 결과를 담아 PR을 올립니다.**
 
 > 2026학년도 AI(클로드 코드) 기반 VIBECODING 실전활용 경진대회 · 상세 기획은 [`DOCS/`](./DOCS) 참고.
+
+<p align="center">
+  <img alt="Frontend" src="https://img.shields.io/badge/FE-React_19_+_Vite-61DAFB?logo=react&logoColor=black">
+  <img alt="Backend" src="https://img.shields.io/badge/BE-Spring_Boot_4_/_Java_21-6DB33F?logo=springboot&logoColor=white">
+  <img alt="Agent" src="https://img.shields.io/badge/Agent-Node_22_+_Claude_SDK-339933?logo=nodedotjs&logoColor=white">
+  <img alt="DB" src="https://img.shields.io/badge/DB-Supabase_PostgreSQL_16-3ECF8E?logo=supabase&logoColor=white">
+  <img alt="Deploy" src="https://img.shields.io/badge/FE_Deploy-Vercel-000000?logo=vercel&logoColor=white">
+</p>
+
+---
+
+## 문서 (Docs)
+
+> **처음이라면 [`AI Learn First`](./DOCS/VibeGuard_AI_Learn_First.md)부터 읽으세요.** 프로젝트 전체 맥락·규칙·현황을 한 문서에 압축해, 팀원이 다른 LLM에 붙여넣고 바로 작업을 시작할 수 있는 온보딩 진입점입니다.
+
+| 문서 | 다루는 범위 | 이럴 때 |
+|---|---|---|
+| [AI Learn First](./DOCS/VibeGuard_AI_Learn_First.md) | 온보딩 프라이머 — 맥락·불변식·규칙·구현 현황·작업 진입점 | **작업을 처음 시작할 때 / LLM에 컨텍스트를 줄 때** |
+| [PRD](./DOCS/VibeGuard_PRD.md) | 제품 요구사항 전체 (기능·API·데이터·NFR·신뢰도·마일스톤) | 요구사항·스코프를 확인할 때 |
+| [Architecture](./DOCS/VibeGuard_Architecture.md) | 시스템 구조·데이터 흐름 (Mermaid 시각화 9종) | 구조·시퀀스·ERD를 눈으로 볼 때 |
+| [API Spec](./DOCS/VibeGuard_API_Spec.md) | REST / SSE / HMAC 콜백 상세 명세 | 엔드포인트·DTO·에러 규격을 구현할 때 |
+| [Business Model](./DOCS/VibeGuard_BusinessModel.md) | FREE / PRO 플랜, 과금 가치 | 기능을 플랜에 매핑할 때 |
+| [Trust Model](./DOCS/VibeGuard_TrustModel.md) | 신뢰도 4축(검증·시스템·투명성·정직성) | 신뢰도 소구점·발표 자료를 다룰 때 |
+| [프로젝트 계획서](./DOCS/VibeGuard_프로젝트_계획서.pdf) | 대회 제출용 기획서 (PDF) | 원본 기획 맥락이 필요할 때 |
+
+**문서 관계도**
+
+```
+                ┌─────────────────────────┐
+   시작 ──────▶ │   AI Learn First (진입)   │
+                └────────────┬────────────┘
+                             │ 종합·요약
+        ┌───────────┬────────┼────────┬────────────┐
+        ▼           ▼        ▼        ▼            ▼
+      PRD     Architecture  API Spec  Business    Trust
+    (요구사항)   (구조·흐름)   (인터페이스) Model      Model
+```
+
+> 문서와 실제 코드가 충돌하면 **코드 및 배포 후 `/v3/api-docs`(OpenAPI)** 가 최종 기준입니다.
 
 ---
 
@@ -112,11 +153,32 @@ npm run build        # 전체 workspace 빌드
 
 ## 개발 규칙
 
-- **브랜치 전략:** `main` ← `develop` ← `feature/*`, PR 리뷰 1인 이상 필수
+- **브랜치 전략:** `main` ← `dev` ← `feature/*`, PR 리뷰 1인 이상 필수
 - **DB 스키마:** 변경은 반드시 Flyway 마이그레이션 파일로만 (`V2__...`)
 - **FE 상태관리:** 서버 상태 = TanStack Query, 클라이언트 상태 = Zustand (혼용 금지)
 - **FE 타입:** 백엔드 OpenAPI → `npm run typegen`으로 생성. 수기 API 타입 정의 금지
 - **보안:** 스캐너·테스트 실행은 전부 Docker 격리, 리포 콘텐츠는 데이터로만 취급 (PRD §11.1)
+- **TDD 언어:** 검증 계층은 **Python(pytest)** 을 1급 지원으로 고정·고도화. Java/JS는 추후 개발 예정 ([PRD §6.4](./DOCS/VibeGuard_PRD.md))
+
+## 제품 플랜 (FREE / PRO)
+
+| | **FREE** — AI Security Fix | **PRO** — Verified AI Security Automation |
+|---|---|---|
+| 한 줄 | 탐지 + AI 패치 + Auto PR 체험 | 여기에 **TDD 검증 + 완전 자동화**까지 |
+| 검사 | 기본 SAST/SCA | 정밀 SAST/SCA + CVE 상세 분석 |
+| TDD 검증(FAIL→PASS) · 회귀 · 자동 재시도 | 미지원 | 지원 |
+| 자동화 파이프라인 · 감사 로그 · 상세 리포트 | 미지원 | 지원 |
+
+> 과금 가치는 "더 많이 탐지"가 아니라 **"AI가 고친 결과를 검증하고 신뢰 가능하게"** 입니다. 상세: [Business Model](./DOCS/VibeGuard_BusinessModel.md)
+
+## 신뢰도 (왜 믿을 수 있나)
+
+VibeGuard의 신뢰도는 4개 축에서 나옵니다 — 상세: [Trust Model](./DOCS/VibeGuard_TrustModel.md)
+
+- **검증** — "고쳤다"가 아니라 TDD FAIL→PASS로 **고쳐졌음을 증명** (최대 차별점)
+- **시스템** — 샌드박스 격리 · 최소 권한 · 토큰 암호화 · HMAC 콜백
+- **투명성** — 감사 로그 · 판단 근거 노출 · 실시간 SSE · Diff/증거 뷰
+- **정직성** — 증명 불가·패치 실패·회귀 깨짐을 숨기지 않고 노출
 
 ## 마일스톤
 

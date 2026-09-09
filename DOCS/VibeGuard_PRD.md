@@ -227,15 +227,21 @@ QUEUED → CLONING → SCANNING(A1) → VERIFYING(A2) → PATCHING(A3) → PR_CR
 
 여기가 다른 도구와 갈리는 지점입니다. 반드시 **테스트를 먼저 씁니다.**
 
+> **언어 전략 — Python 메인 고정.** TDD 검증 계층은 **Python(pytest)** 을 유일한 1급 지원 언어로 고정하고
+> 이 언어에 대해서만 FAIL→PASS 증명·회귀 게이트·자동 재시도를 고도화합니다. 지원 언어를 넓히면
+> 러너별 실패 모드·플래키 테스트·매니페스트 파싱 편차가 늘어 **증명의 신뢰도가 떨어지므로**,
+> 하나의 언어를 확실히 검증하는 데 집중합니다. Java/Spring(JUnit)·JS/TS(Vitest/Jest)는
+> **추후 개발 예정**이며, 그 전까지 Python 외 리포는 패치 단계에서 "지원 예정 언어" 안내 후 스킵합니다.
+
 ```
-[Step 1] 재현 테스트 작성
+[Step 1] 재현 테스트 작성 (pytest)
    SAST → 악성 페이로드를 주입하는 테스트
           (SQLi: "' OR 1=1--" / 경로순회: "../../etc/passwd" / XSS: "<script>")
           "안전하게 거부/이스케이프되어야 한다"를 단언
    SCA  → 해석된 의존성 버전이 fixed version 이상임을 단언
 
 [Step 2] 패치 전 실행 → 반드시 FAIL 확인
-   ⚠️ 여기서 PASS가 나오면 = 애초에 취약하지 않았음
+   [주의] 여기서 PASS가 나오면 = 애초에 취약하지 않았음
       → 패치 중단, "증명 불가(오탐 의심)"으로 분류. 이 게이트가 오탐을 잡는 장치입니다.
 
 [Step 3] 패치 적용
@@ -249,10 +255,17 @@ QUEUED → CLONING → SCANNING(A1) → VERIFYING(A2) → PATCHING(A3) → PR_CR
    하나라도 깨지면 REGRESSION_BLOCKED. PR 생성하지 않습니다.
 ```
 
-| 대상 스택 | 테스트 러너 | 매니페스트 |
-|---|---|---|
-| Java / Spring Boot | JUnit 5 + Gradle/Maven | `build.gradle`, `pom.xml` |
-| JS / TS | Vitest 또는 Jest | `package.json`, lockfile |
+**지원 언어 로드맵**
+
+| 대상 스택 | 테스트 러너 | 매니페스트 | 상태 |
+|---|---|---|---|
+| **Python (메인)** | **pytest** | `pyproject.toml`, `requirements.txt`, `poetry.lock`/`uv.lock` | **1급 지원 (고도화 대상)** |
+| Java / Spring Boot | JUnit 5 + Gradle/Maven | `build.gradle`, `pom.xml` | 추후 개발 예정 |
+| JS / TS | Vitest 또는 Jest | `package.json`, lockfile | 추후 개발 예정 |
+
+> Python 고도화 범위: pytest 재현 테스트 자동 생성, `pip`/`poetry`/`uv` 매니페스트 해석 및 최소 상향 버전 적용,
+> 격리 컨테이너에서 phase별(PRE_PATCH/POST_PATCH/REGRESSION) 실행 및 로그 파싱, 실패 시 자동 재시도.
+> 패치 전략 템플릿(§R3)도 Python 관용구 기준으로 우선 정비합니다.
 
 ### 6.5 Agent 4 — PR Author
 
@@ -261,7 +274,7 @@ QUEUED → CLONING → SCANNING(A1) → VERIFYING(A2) → PATCHING(A3) → PR_CR
 - PR 본문 템플릿:
 
 ```markdown
-## 🛡️ VibeGuard 보안 패치
+## VibeGuard 보안 패치
 
 **취약점** CVE-2024-XXXXX · CVSS 9.8 (Critical)
 **위치** `src/main/java/.../UserRepository.java:47`
@@ -273,9 +286,9 @@ QUEUED → CLONING → SCANNING(A1) → VERIFYING(A2) → PATCHING(A3) → PR_CR
 ### 검증 증거
 | 단계 | 결과 |
 |---|---|
-| 재현 테스트 (패치 전) | ❌ FAIL — 인증 우회 성공 |
-| 재현 테스트 (패치 후) | ✅ PASS — 입력이 안전하게 바인딩됨 |
-| 기존 회귀 테스트 | ✅ 128/128 통과 |
+| 재현 테스트 (패치 전) | FAIL — 인증 우회 성공 |
+| 재현 테스트 (패치 후) | PASS — 입력이 안전하게 바인딩됨 |
+| 기존 회귀 테스트 | 128/128 통과 |
 
 <details><summary>재현 테스트 코드</summary>...</details>
 <details><summary>패치 전 FAIL 로그</summary>...</details>
@@ -448,6 +461,70 @@ users ──< repositories ──< scans ──< findings ──< patches ──
 - 스캔별 `traceId`로 Spring Boot ↔ Runner ↔ MCP 로그 상관 추적
 - 필수 메트릭: 단계별 소요 시간, 토큰 사용량, 패치 성공률, 컨테이너 실패율
 
+### 11.4 신뢰도 모델 (Trust Model)
+
+VibeGuard가 "AI가 고친 코드를 왜 믿을 수 있는가"에 답하는 4개 축입니다. 대부분 위 NFR·앞선 섹션에 이미 설계되어 있으며, 여기서는 **신뢰도 관점으로 재배치**해 심사 소구점을 명확히 합니다. 이 중 심사 임팩트가 가장 큰 것은 **검증 신뢰(TDD FAIL→PASS)** 입니다.
+
+```
+             VibeGuard Trust
+                    │
+   ┌────────┬───────┴───────┬─────────┐
+   ↓        ↓               ↓         ↓
+ 검증      시스템          투명성      정직성
+ (증명)   (격리·최소권한)  (감사·근거) (실패 노출)
+```
+
+#### ① 검증 신뢰 — "고쳤다"가 아니라 "고쳐졌음을 증명" (최대 차별점)
+
+| 요소 | 설명 | 근거 |
+|---|---|---|
+| TDD FAIL→PASS 증명 | 패치 전 재현 테스트 반드시 FAIL → 패치 후 PASS 확인. "진짜 취약했고, 진짜 고쳐졌다"의 기계적 증거 | §6.4 |
+| 오탐 게이트 | 패치 전 이미 PASS면 "증명 불가(오탐 의심)"으로 분류하고 패치하지 않음 | §6.4 Step 2 |
+| Regression 게이트 | 기존 테스트 100% 통과해야만 PR 생성, 하나라도 깨지면 차단 | §6.4 Step 5, G4 |
+| NVD/GHSA 교차 검증 | 스캐너 출력을 그대로 믿지 않고 공식 DB로 실제 위험도·영향 버전 재확인 | §6.3 |
+| 증거 첨부 PR | 재현 테스트 코드 + FAIL/PASS 로그 + 회귀 결과를 PR 본문에 첨부 | §6.5 |
+
+#### ② 시스템 신뢰 — "우리 도구 자체가 안전한가"
+
+| 요소 | 설명 | 근거 |
+|---|---|---|
+| 샌드박스 격리 | 스캐너·테스트는 전부 Docker 격리 실행(`--network=none` 등) | NFR-S1 |
+| 프롬프트 인젝션 방어 | 리포 README/주석을 데이터로만 취급 + 툴 화이트리스트 이중 방어 | NFR-S6 |
+| 최소 권한 | GitHub App 권한 한정, main 직접 푸시·자동 머지 영구 금지 | §6.5 |
+| deny-by-default 훅 | `PreToolUse` 훅으로 리포 밖 쓰기·`rm -rf`·외부 네트워크 차단 | NFR-S5 |
+| 토큰 암호화 | GitHub 토큰 AES-256-GCM 저장, 로그·SSE·에러에 노출 금지 | NFR-S3 |
+| 콜백 무결성 | Runner ↔ Spring Boot 콜백 HMAC-SHA256 서명 검증 | NFR-S4 |
+| 데이터 최소 보관 | 클론 리포는 스캔 종료 후 즉시 삭제(스니펫만 보관) | NFR-S8 |
+
+#### ③ 투명성 신뢰 — "왜 그렇게 판단했는지 보여준다"
+
+| 요소 | 설명 | 근거 |
+|---|---|---|
+| 감사 로그 | 모든 에이전트 툴 호출을 `audit_logs`에 기록 → 사후 추적 | NFR-S7, §10 |
+| 판단 근거 노출 | Finding마다 CVE 정보·CVSS·rationale 표시 | F-06 |
+| 실시간 진행 스트림 | 4개 에이전트 진행을 SSE로 라이브 노출 | F-04, §9.1 |
+| Diff / TDD 증거 뷰 | 패치 전후 diff, FAIL 로그/테스트 코드/PASS 로그 3단 표시 | F-07, F-08 |
+
+#### ④ 정직성 신뢰 — "안 되는 건 안 된다고 말한다"
+
+| 상황 | 시스템 동작 | 근거 |
+|---|---|---|
+| 증명 불가(패치 전 PASS) | 정보성 Finding으로만 표기, 패치하지 않음 | §4.2 |
+| 패치 후에도 FAIL | 최대 N회 재시도 후 `PATCH_FAILED`, 시도 이력 전부 노출 | §4.2 |
+| 회귀 테스트 깨짐 | PR 차단, 깨진 테스트 목록과 함께 수동 검토 요청 | §4.2 |
+| LLM 비결정성 | 성공률을 확률적 지표로 정직하게 제시 | R2 |
+
+#### 신뢰도 강화 로드맵 (아직 미설계, 추후 도입 검토)
+
+| 제안 | 효과 |
+|---|---|
+| 신뢰도 점수(Confidence Score) | Finding별 탐지 확신도 수치화 — SCA(버전 비교=높음) vs SAST(reachability 불확실=중간) 구분 |
+| 자기 자신에 적용(Dogfooding) | 우리 리포에 VibeGuard를 돌려 PR 생성 → "우리도 우리 도구를 믿는다"는 증거 |
+| 제3자 검증 가능성 | PR의 테스트를 누구나 재실행 가능 → 기계가 증명 |
+| 버전·프롬프트 투명화 | 검사에 쓴 프롬프트/스캐너 버전을 리포트에 기록 |
+
+> 상세 서술과 FREE/PRO 플랜별 신뢰도 매핑은 [`VibeGuard_TrustModel.md`](./VibeGuard_TrustModel.md) 참고.
+
 ---
 
 ## 12. 기술 스택 확정
@@ -516,22 +593,24 @@ users ──< repositories ──< scans ──< findings ──< patches ──
 
 ---
 
-## 14. 마일스톤 (6주 기준)
+## 14. 마일스톤 (2주 기준)
 
-| 주차 | 목표 | 산출물 | 주담당 |
-|---|---|---|---|
-| W1 | 기반 구축 | 리포 세팅, Docker Compose, DB 스키마(Flyway), GitHub OAuth 동작, 시드 취약 리포 2종 제작 | 전원 |
-| W2 | 탐지 파이프라인 | `scanner-mcp` 완성, Agent 1 세션 동작, Finding DB 저장, 목록 화면 | 김신우·송하성 |
-| W3 | 검증 파이프라인 | `advisory-mcp`(NVD/OSV/GHSA) 완성, Agent 2 세션, 캐싱, 상세 화면 | 민진홍·송하성 |
-| W4 | **패치 + TDD (최대 난관)** | `testrunner-mcp`, Agent 3 FAIL→PASS 루프 완성, Diff 뷰어 | 김신우·민진홍 |
-| W5 | PR + 실시간 UX | GitHub MCP 연동, Agent 4, SSE 스트림, 진행 화면 | 송하성·민진홍 |
-| W6 | 완성도 | E2E 시연 리허설, 성공률 측정, 대시보드, 발표 자료 | 김세원 주도, 전원 |
+전체 기간은 **2주**입니다. 각 주를 전반/후반으로 나눠 6개 작업 구간으로 운용하며, 6주 계획을 압축한 형태입니다. **패치 + TDD(D6~D9)가 성패를 가르므로**, 지연되면 대시보드·통계·확장 룰을 먼저 버리고 이 구간을 사수합니다.
 
-**W4가 프로젝트의 성패를 가릅니다.** W3까지 지연되면 W4를 지키기 위해 대시보드와 통계를 먼저 버리세요.
+| 구간 | 일자 | 목표 | 산출물 | 주담당 |
+|---|---|---|---|---|
+| W1 전반 | D1~D2 | 기반 구축 | 리포 세팅, Docker Compose, DB 스키마(Flyway), GitHub OAuth 동작, 시드 취약 리포 2종, OpenAPI 스펙 확정(프론트 MSW 목 선행) | 전원 |
+| W1 중반 | D3~D4 | 탐지 파이프라인 | `scanner-mcp` 완성, Agent 1 세션 동작, Finding DB 저장, 목록 화면 | 김신우·송하성 |
+| W1 후반 | D5 | 검증 파이프라인 | `advisory-mcp`(NVD/OSV/GHSA), Agent 2 세션, 캐싱, 상세 화면 | 민진홍·송하성 |
+| W2 전반 | D6~D9 | **패치 + TDD (최대 난관)** | `testrunner-mcp`, Agent 3 FAIL→PASS 루프(Python/pytest), Diff 뷰어 | 김신우·민진홍 |
+| W2 중반 | D10~D11 | PR + 실시간 UX | GitHub MCP 연동, Agent 4, SSE 스트림, 진행 화면 | 송하성·민진홍 |
+| W2 후반 | D12~D14 | 완성도 | E2E 시연 리허설, 성공률 측정, (여유 시)대시보드, 발표 자료 | 김세원 주도, 전원 |
+
+> 2주 압축 운용 원칙: 탐지·검증(W1 중·후반)이 D5를 넘겨 밀리면, **W2 전반의 패치+TDD 구간을 지키기 위해** SCA 1종·SAST 1종(SQLi)만 확실히 끝내고 확장 룰과 대시보드는 과감히 후순위로 미룹니다. MVP Freeze(§13) 밖은 건드리지 않습니다.
 
 ### 데일리 리듬
-- 매일 15분 스탠드업, 주 2회 통합 테스트 (수/토)
-- 브랜치 전략: `main` ← `develop` ← `feature/*`, PR 리뷰 1인 이상 필수 (자기 프로젝트에 자기 도구를 적용하는 것도 좋은 시연 소재)
+- 매일 15분 스탠드업, **격일 통합 테스트**(D3·D5·D7·D9·D11·D13). 기간이 짧으므로 통합을 자주 돌려 병합 지연을 조기에 잡습니다.
+- 브랜치 전략: `main` ← `dev` ← `feature/*`, PR 리뷰 1인 이상 필수 (자기 프로젝트에 자기 도구를 적용하는 것도 좋은 시연 소재)
 
 ---
 
@@ -539,7 +618,7 @@ users ──< repositories ──< scans ──< findings ──< patches ──
 
 | # | 리스크 | 영향 | 대응 |
 |---|---|---|---|
-| R1 | **서브에이전트 MCP 미접근** — Agent 툴 호출 시 MCP 툴이 조용히 사라짐 | 치명적 | 서브에이전트 대신 4개 독립 세션 구조 (§5.3). W1에 최소 재현 코드로 검증 완료할 것 |
+| R1 | **서브에이전트 MCP 미접근** — Agent 툴 호출 시 MCP 툴이 조용히 사라짐 | 치명적 | 서브에이전트 대신 4개 독립 세션 구조 (§5.3). W1 전반(D1~D2)에 최소 재현 코드로 검증 완료할 것 |
 | R2 | **LLM 비결정성** — 같은 입력에 다른 패치 | 높음 | 프롬프트 버전 관리, 시드 리포 고정, `temperature` 최소화, 성공률을 확률적 지표로 정직하게 제시 |
 | R3 | **Agent 3 패치 품질 미달** — FAIL→PASS 실패 반복 | 치명적 | 취약점 유형별 패치 전략 템플릿을 프롬프트에 명시. MVP는 SQLi 1종만 확실히 |
 | R4 | 회귀 테스트 없는 리포 | 높음 | 시연 대상은 테스트 보유 리포로 한정. 미보유 시 안내 후 패치 스킵 |
@@ -547,8 +626,8 @@ users ──< repositories ──< scans ──< findings ──< patches ──
 | R6 | Claude API 비용·토큰 초과 | 중간 | 스캔당 토큰 상한, 파일 청킹, Finding 상위 N건만 패치 시도 |
 | R7 | 프롬프트 인젝션 (악성 리포) | 높음 | NFR-S6. 리포 콘텐츠는 데이터로만 취급 + 툴 화이트리스트 |
 | R8 | 샌드박스 탈출 | 높음 | NFR-S1. 네트워크 차단·읽기전용·권한 드롭 |
-| R9 | Spring Boot 4 + 라이브러리 호환 이슈 | 중간 | W1에 의존성 스파이크 선행. 문제 시 3.5.x 폴백 결정 |
-| R10 | 4인 병렬 개발 통합 지연 | 중간 | W1에 OpenAPI 스펙 먼저 확정 → 프론트는 MSW 목으로 선행 개발 |
+| R9 | Spring Boot 4 + 라이브러리 호환 이슈 | 중간 | W1 전반(D1~D2)에 의존성 스파이크 선행. 문제 시 3.5.x 폴백 결정 |
+| R10 | 4인 병렬 개발 통합 지연 | 중간 | W1 전반(D1~D2)에 OpenAPI 스펙 먼저 확정 → 프론트는 MSW 목으로 선행 개발 |
 
 ---
 
@@ -560,7 +639,7 @@ users ──< repositories ──< scans ──< findings ──< patches ──
 0:30  기존 도구 대비 — Snyk 경고 화면 캡처 → "경고만 있고 증명은 없습니다"
 1:00  VibeGuard 실행 — 리포 연결 후 스캔 시작
 1:15  실시간 파이프라인 시연 (4개 에이전트 진행 라이브)
-2:30  ★ 하이라이트 — TDD 증거 탭
+2:30  [하이라이트] TDD 증거 탭
       "패치 전 이 테스트는 실패했습니다" (FAIL 로그)
       "패치 후 통과합니다" (PASS 로그)
       "기존 128개 테스트도 전부 통과합니다"
