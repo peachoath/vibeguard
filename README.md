@@ -182,7 +182,7 @@ VibeGuard의 신뢰도는 4개 축에서 나옵니다 — 상세: [Trust Model](
 
 ## 마일스톤
 
-6주 계획 · **W4(패치 + TDD 루프)가 성패를 가릅니다.** 상세: [PRD §14](./DOCS/VibeGuard_PRD.md).
+2주 계획 · **W1~2(패치 + TDD 루프)가 성패를 가릅니다.** 상세: [PRD §14](./DOCS/VibeGuard_PRD.md).
 
 ## 팀
 
