@@ -315,5 +315,6 @@ docker compose up -d postgres
 | [VibeGuard_API_Spec.md](./VibeGuard_API_Spec.md) | REST/SSE/콜백 상세 명세 |
 | [VibeGuard_BusinessModel.md](./VibeGuard_BusinessModel.md) | FREE/PRO 플랜 |
 | [VibeGuard_TrustModel.md](./VibeGuard_TrustModel.md) | 신뢰도 4축 상세 |
+| [VibeGuard_Team_Roles.md](./VibeGuard_Team_Roles.md) | 4인 역할 분담·경계·협업 계약 |
 
 > **끝. LLM은 이제 §13 체크리스트에 따라 요청받은 작업을 시작하라.**

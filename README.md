@@ -33,6 +33,7 @@ GitHub 리포지토리를 연결하면 AI 에이전트가 **취약 라이브러�
 | [API Spec](./DOCS/VibeGuard_API_Spec.md) | REST / SSE / HMAC 콜백 상세 명세 | 엔드포인트·DTO·에러 규격을 구현할 때 |
 | [Business Model](./DOCS/VibeGuard_BusinessModel.md) | FREE / PRO 플랜, 과금 가치 | 기능을 플랜에 매핑할 때 |
 | [Trust Model](./DOCS/VibeGuard_TrustModel.md) | 신뢰도 4축(검증·시스템·투명성·정직성) | 신뢰도 소구점·발표 자료를 다룰 때 |
+| [Team Roles](./DOCS/VibeGuard_Team_Roles.md) | 4인 역할 분담·경계·협업 계약 | 누가 무엇을 맡는지 확인할 때 |
 | [프로젝트 계획서](./DOCS/VibeGuard_프로젝트_계획서.pdf) | 대회 제출용 기획서 (PDF) | 원본 기획 맥락이 필요할 때 |
 
 **문서 관계도**
