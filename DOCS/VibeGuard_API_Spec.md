@@ -5,8 +5,8 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v1.0 |
-| 최종 수정 | 2026-09-09 |
+| 문서 버전 | **v2.0 (방향 전환: SCA·회귀 증거 반영)** |
+| 최종 수정 | 2026-09-10 |
 | Base URL | `/api/v1` |
 | 인증 | 세션 쿠키 (HttpOnly, SameSite=Lax) |
 | 직렬화 | JSON (UTF-8) |
@@ -69,7 +69,7 @@ FE → GET /oauth2/authorization/github → GitHub 로그인 → 콜백
   "type": "https://vibeguard.dev/errors/scan-timeout",
   "title": "Scan Timeout",
   "status": 504,
-  "detail": "Semgrep 실행이 300초를 초과했습니다.",
+  "detail": "Trivy 스캔이 300초를 초과했습니다.",
   "instance": "/api/v1/scans/019.."
 }
 ```
@@ -101,7 +101,7 @@ FE → GET /oauth2/authorization/github → GitHub 로그인 → 콜백
 | 10 | GET | `/api/v1/scans/{id}/findings` | 필요 | Finding 목록(필터/페이징) |
 | 11 | GET | `/api/v1/findings/{id}` | 필요 | Finding 상세 + 근거 |
 | 12 | PATCH | `/api/v1/findings/{id}/ignore` | 필요 | 오탐 처리 |
-| 13 | GET | `/api/v1/findings/{id}/evidence` | 필요 | TDD 증거 |
+| 13 | GET | `/api/v1/findings/{id}/evidence` | 필요 | 회귀 증거(패치 전후 로그) |
 | 14 | GET | `/api/v1/findings/{id}/diff` | 필요 | 패치 diff |
 | 15 | GET | `/api/v1/dashboard/summary` | 필요 | 통계 요약 |
 | 16 | POST | `/api/v1/internal/runner/events` | HMAC | **런너 → 서버 콜백** |
@@ -185,7 +185,7 @@ GitHub OAuth 로그인 시작. 302 리다이렉트. 스코프: `read:user, user:
 }
 ```
 - 동일 `repositoryId + ref` 스캔이 진행 중이면 `409` (`/errors/scan-conflict`).
-- `status` enum: `QUEUED, CLONING, SCANNING, VERIFYING, PATCHING, PR_CREATING, COMPLETED, NO_FINDINGS, PATCH_FAILED, REGRESSION_BLOCKED, FAILED` (PRD §6.1).
+- `status` enum: `QUEUED, CLONING, SCANNING, VERIFYING, REGRESSION_CHECK, PR_CREATING, COMPLETED, NO_FINDINGS, PATCH_FAILED, REGRESSION_BLOCKED, FAILED` (PRD §6.1).
 
 ### 5.2 GET `/api/v1/scans/{id}`
 현재 스캔 상태 폴링용. `200` → `ScanDto`. 없으면 `404`.
@@ -200,10 +200,10 @@ event: stage
 data: {"scanId":"019a...","stage":"PATCHING","agent":3,"status":"RUNNING","progress":0.45}
 
 event: log
-data: {"scanId":"019a...","agent":3,"level":"INFO","message":"재현 테스트 작성 완료 — 실행 중","ts":"2026-09-09T04:13:10Z"}
+data: {"scanId":"019a...","agent":3,"level":"INFO","message":"패치 전 pytest 실행 완료 — 24/24 통과","ts":"2026-09-10T04:13:10Z"}
 
 event: finding
-data: {"scanId":"019a...","findingId":"...","severity":"CRITICAL","title":"SQL Injection"}
+data: {"scanId":"019a...","findingId":"...","severity":"CRITICAL","title":"pyyaml 5.1 (CVE-2019-20477)"}
 
 event: done
 data: {"scanId":"019a...","status":"COMPLETED","prUrl":"https://github.com/.../pull/42"}
@@ -233,7 +233,7 @@ data: {"scanId":"019a...","status":"COMPLETED","prUrl":"https://github.com/.../p
 | 파라미터 | 타입 | 설명 |
 |---|---|---|
 | `severity` | enum[] | `CRITICAL,HIGH,MEDIUM,LOW` 다중 |
-| `type` | enum | `SCA` \| `SAST` |
+| `type` | enum | `SCA` (SAST는 추후) |
 | `status` | enum | `OPEN,IGNORED,PATCHED,MANUAL` |
 | `page` | int | 0-base |
 | `size` | int | 기본 20 |
@@ -244,18 +244,14 @@ data: {"scanId":"019a...","status":"COMPLETED","prUrl":"https://github.com/.../p
   "content": [
     {
       "id": "f1...",
-      "type": "SAST",
-      "ruleId": "python.lang.security.audit.sqli",
-      "cveId": null,
-      "cweId": "CWE-89",
+      "type": "SCA",
+      "cveId": "CVE-2019-20477",
       "severity": "CRITICAL",
       "cvssScore": 9.8,
-      "filePath": "app/db.py",
-      "lineStart": 47,
-      "lineEnd": 49,
-      "packageName": null,
-      "currentVersion": null,
-      "recommendedVersion": null,
+      "manifestPath": "requirements.txt",
+      "packageName": "pyyaml",
+      "currentVersion": "5.1",
+      "recommendedVersion": "5.4",
       "verdict": "PATCH",
       "status": "OPEN"
     }
@@ -265,37 +261,37 @@ data: {"scanId":"019a...","status":"COMPLETED","prUrl":"https://github.com/.../p
 ```
 
 ### 6.2 GET `/api/v1/findings/{id}`
-상세 + 근거. `200` → `FindingDetailDto` (위 필드 + `snippet`, `rationale`, `advisory` 확장).
+상세 + 근거. `200` → `FindingDetailDto` (위 필드 + `rationale`, `advisory` 확장).
 
 ```json
 {
-  "id": "f1...", "type": "SAST", "severity": "CRITICAL", "cvssScore": 9.8,
-  "cweId": "CWE-89", "filePath": "app/db.py", "lineStart": 47, "lineEnd": 49,
-  "snippet": "cursor.execute(\"SELECT * FROM users WHERE id = '\" + uid + \"'\")",
-  "verdict": "PATCH",
-  "rationale": "사용자 입력이 문자열 연결로 쿼리에 직접 삽입됨. NVD/GHSA 교차 검증 결과 재현 가능.",
+  "id": "f1...", "type": "SCA", "severity": "CRITICAL", "cvssScore": 9.8,
+  "cveId": "CVE-2019-20477", "manifestPath": "requirements.txt",
+  "packageName": "pyyaml", "currentVersion": "5.1", "recommendedVersion": "5.4",
+  "verdict": "PATCH", "majorJump": false,
+  "rationale": "PyYAML 5.1 full_load 임의 역직렬화. NVD/OSV/GHSA 교차 검증. 안전 버전 5.2 이상, major 점프 없이 5.4로 결정.",
   "advisory": { "cvssVector": "CVSS:3.1/AV:N/AC:L/...", "source": "NVD" }
 }
 ```
 
 ### 6.3 PATCH `/api/v1/findings/{id}/ignore`
-오탐 처리. **요청** `{ "reason": "테스트 전용 코드, 운영 미노출" }` → `200 FindingDto` (status=`IGNORED`). 재스캔 시 유지.
+오탐 처리. **요청** `{ "reason": "취약 함수 미사용, 영향 없음" }` → `200 FindingDto` (status=`IGNORED`). 재스캔 시 유지.
 
-### 6.4 GET `/api/v1/findings/{id}/evidence` — TDD 증거
-`200` → `EvidenceDto`. FREE 플랜 Finding은 TDD 미수행이라 `phases`가 비거나 `null`일 수 있음(BusinessModel 참고).
+### 6.4 GET `/api/v1/findings/{id}/evidence` — 회귀 증거
+`200` → `EvidenceDto`. 재현 테스트를 만들지 않으므로 리포의 기존 테스트를 패치 전후로 실행한 결과다. 테스트가 없는 리포(기본 등급/NO_TESTS)는 `phases`가 비어 있을 수 있음(BusinessModel 참고).
 
 ```json
 {
   "findingId": "f1...",
-  "testCode": "def test_sqli_rejected(): ...",
   "phases": [
-    { "phase": "PRE_PATCH",  "passed": false, "total": 1,   "failed": 1,  "log": "AssertionError: 인증 우회 성공" },
-    { "phase": "POST_PATCH", "passed": true,  "total": 1,   "failed": 0,  "log": "1 passed" },
-    { "phase": "REGRESSION", "passed": true,  "total": 128, "failed": 0,  "log": "128 passed" }
+    { "phase": "PRE_PATCH",  "passed": true, "exitCode": 0, "outcome": "PASSED", "total": 24, "failed": 0, "log": "24 passed (기준선)" },
+    { "phase": "POST_PATCH", "passed": true, "exitCode": 0, "outcome": "PASSED", "total": 24, "failed": 0, "log": "24 passed (안 깨짐)" }
   ],
   "attempts": 1
 }
 ```
+
+> `outcome` enum: `PASSED / FAILED / NO_TESTS / OOM_KILLED / TIMED_OUT / INSTALL_FAILED`. `testCode`(재현 테스트 코드) 필드는 방향 전환으로 제거됨.
 
 ### 6.5 GET `/api/v1/findings/{id}/diff`
 패치 diff. `200` → `DiffDto`.
@@ -304,8 +300,8 @@ data: {"scanId":"019a...","status":"COMPLETED","prUrl":"https://github.com/.../p
 {
   "findingId": "f1...",
   "format": "unified",
-  "filePath": "app/db.py",
-  "patch": "@@ -47,3 +47,3 @@\n- cursor.execute(\"... '\" + uid + \"'\")\n+ cursor.execute(\"... = %s\", (uid,))"
+  "filePath": "requirements.txt",
+  "patch": "@@ -3,1 +3,1 @@\n- pyyaml==5.1\n+ pyyaml==5.4"
 }
 ```
 
