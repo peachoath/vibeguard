@@ -30,4 +30,11 @@ public enum ScanStatus {
             || this == REGRESSION_BLOCKED
             || this == FAILED;
     }
+
+    /** 진행 중(비종료) 상태 목록 — 중복 스캔 방지 조회에 사용. */
+    public static java.util.List<ScanStatus> activeStatuses() {
+        return java.util.Arrays.stream(values())
+            .filter(s -> !s.isTerminal())
+            .toList();
+    }
 }
