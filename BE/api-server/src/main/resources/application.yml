@@ -36,6 +36,11 @@ spring:
             scope: read:user,user:email
 
 vibeguard:
+  app:
+    # 로그인 성공 후 리다이렉트 URL. 기본값 "/" (prod: FE·BE 동일 오리진).
+    # dev는 FE dev 서버가 별도 포트라 .env의 POST_LOGIN_URI로 절대 URL 지정
+    #   예) POST_LOGIN_URI=http://localhost:5173/dashboard
+    post-login-uri: ${POST_LOGIN_URI:/}
   # GitHub access token 암호화 키 (AES-256-GCM, NFR-S3). base64 인코딩된 32바이트.
   # 운영에서는 반드시 TOKEN_ENC_KEY 환경변수로 교체하세요.
   security:
