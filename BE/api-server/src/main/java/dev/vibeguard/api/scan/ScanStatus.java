@@ -1,20 +1,23 @@
 package dev.vibeguard.api.scan;
 
 /**
- * 스캔 파이프라인 상태 (PRD §6.1 상태머신).
+ * 스캔 파이프라인 상태 (PRD §6.1 상태머신, 방향 전환 v2).
  *
  * <pre>
- * QUEUED → CLONING → SCANNING(A1) → VERIFYING(A2) → PATCHING(A3) → PR_CREATING(A4) → COMPLETED
- *                          ↓             ↓              ↓                ↓
- *                       FAILED      NO_FINDINGS   PATCH_FAILED    REGRESSION_BLOCKED
+ * QUEUED → CLONING → SCANNING(A1) → VERIFYING(A2) → REGRESSION_CHECK(A3) → PR_CREATING(A4) → COMPLETED
+ *                          ↓             ↓                   ↓                     ↓
+ *                       FAILED      NO_FINDINGS        PATCH_FAILED          REGRESSION_BLOCKED
  * </pre>
+ *
+ * REGRESSION_CHECK(A3): 설치→테스트(패치 전) → 버전 상향 → 설치→테스트(패치 후).
+ * 테스트가 없는 리포는 회귀 증명 없이 통과 처리 후 PR_CREATING으로 진행.
  */
 public enum ScanStatus {
     QUEUED,
     CLONING,
     SCANNING,
     VERIFYING,
-    PATCHING,
+    REGRESSION_CHECK,
     PR_CREATING,
     COMPLETED,
     NO_FINDINGS,

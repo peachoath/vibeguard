@@ -10,7 +10,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** patches 테이블 (PRD §10). Finding 1건에 대한 패치 시도(diff + 재현 테스트 코드). */
+/** patches 테이블 (PRD §10, 방향 전환 v2). Finding 1건에 대한 패치(매니페스트 버전 상향 diff). */
 @Entity
 @Table(name = "patches")
 @Getter
@@ -27,9 +27,6 @@ public class Patch {
 
     @Column
     private String diff;
-
-    @Column(name = "test_code")
-    private String testCode;
 
     @Column
     private String strategy;

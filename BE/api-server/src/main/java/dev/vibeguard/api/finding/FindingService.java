@@ -50,24 +50,26 @@ public class FindingService {
         return FindingDto.from(f);
     }
 
-    /** TDD 증거 — 최신 attempt 패치의 테스트 코드 + phase별 실행 결과. */
+    /** 회귀 증거 — 최신 attempt 패치의 phase별(PRE/POST) 실행 결과. 재현 테스트 코드는 없음. */
     @Transactional(readOnly = true)
     public EvidenceDto evidence(UUID findingId) {
         require(findingId);
         List<Patch> patches = patchRepository.findByFindingIdOrderByAttemptNo(findingId);
         if (patches.isEmpty()) {
-            // TDD 미수행(FREE 등) — 빈 증거
-            return new EvidenceDto(findingId, null, List.of(), 0);
+            // 회귀 미수행(기본 등급/테스트 없음) — 빈 증거
+            return new EvidenceDto(findingId, List.of(), 0);
         }
         Patch latest = patches.get(patches.size() - 1);
         List<EvidenceDto.Phase> phases = new ArrayList<>();
         for (TestRun tr : testRunRepository.findByPatchIdOrderByCreatedAt(latest.getId())) {
-            phases.add(new EvidenceDto.Phase(tr.getPhase(), tr.isPassed(), tr.getTotal(), tr.getFailed(), tr.getLog()));
+            phases.add(new EvidenceDto.Phase(
+                tr.getPhase(), tr.isPassed(), tr.getExitCode(), tr.getOutcome(),
+                tr.getTotal(), tr.getFailed(), tr.getLog()));
         }
-        return new EvidenceDto(findingId, latest.getTestCode(), phases, patches.size());
+        return new EvidenceDto(findingId, phases, patches.size());
     }
 
-    /** 패치 diff — 최신 attempt 패치의 diff. */
+    /** 패치 diff — 최신 attempt 패치의 매니페스트 변경. */
     @Transactional(readOnly = true)
     public DiffDto diff(UUID findingId) {
         Finding f = require(findingId);
@@ -76,7 +78,8 @@ public class FindingService {
             throw new NotFoundException("패치가 없는 Finding입니다: " + findingId);
         }
         Patch latest = patches.get(patches.size() - 1);
-        return new DiffDto(findingId, "unified", f.getFilePath(), latest.getDiff());
+        String path = f.getManifestPath() != null ? f.getManifestPath() : f.getFilePath();
+        return new DiffDto(findingId, "unified", path, latest.getDiff());
     }
 
     private Finding require(UUID findingId) {

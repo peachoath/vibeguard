@@ -15,6 +15,7 @@ public record FindingDto(
     String filePath,
     Integer lineStart,
     Integer lineEnd,
+    String manifestPath,
     String packageName,
     String currentVersion,
     String recommendedVersion,
@@ -25,7 +26,7 @@ public record FindingDto(
         return new FindingDto(
             f.getId(), f.getType(), f.getRuleId(), f.getCveId(), f.getCweId(),
             f.getSeverity(), f.getCvssScore(), f.getFilePath(), f.getLineStart(), f.getLineEnd(),
-            f.getPackageName(), f.getCurrentVersion(), f.getRecommendedVersion(),
+            f.getManifestPath(), f.getPackageName(), f.getCurrentVersion(), f.getRecommendedVersion(),
             f.getVerdict(), f.getStatus());
     }
 }

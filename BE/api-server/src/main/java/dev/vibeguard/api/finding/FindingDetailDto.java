@@ -16,6 +16,7 @@ public record FindingDetailDto(
     Integer lineStart,
     Integer lineEnd,
     String snippet,
+    String manifestPath,
     String packageName,
     String currentVersion,
     String recommendedVersion,
@@ -27,7 +28,7 @@ public record FindingDetailDto(
         return new FindingDetailDto(
             f.getId(), f.getType(), f.getRuleId(), f.getCveId(), f.getCweId(),
             f.getSeverity(), f.getCvssScore(), f.getFilePath(), f.getLineStart(), f.getLineEnd(),
-            f.getSnippet(), f.getPackageName(), f.getCurrentVersion(), f.getRecommendedVersion(),
-            f.getVerdict(), f.getRationale(), f.getStatus());
+            f.getSnippet(), f.getManifestPath(), f.getPackageName(), f.getCurrentVersion(),
+            f.getRecommendedVersion(), f.getVerdict(), f.getRationale(), f.getStatus());
     }
 }

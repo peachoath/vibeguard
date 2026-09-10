@@ -12,7 +12,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** test_runs 테이블 (PRD §10). 패치별 phase(PRE/POST/REGRESSION) 실행 결과. */
+/** test_runs 테이블 (PRD §10, 방향 전환 v2). 패치별 phase(PRE/POST) 회귀 실행 결과. */
 @Entity
 @Table(name = "test_runs")
 @Getter
@@ -33,6 +33,15 @@ public class TestRun {
 
     @Column(nullable = false)
     private boolean passed;
+
+    /** 컨테이너 종료 코드 (V2). */
+    @Column(name = "exit_code")
+    private Integer exitCode;
+
+    /** 실행 결과 원인 구분 (V2). PASSED/FAILED/NO_TESTS/OOM_KILLED/TIMED_OUT/INSTALL_FAILED. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 16)
+    private TestOutcome outcome;
 
     @Column
     private Integer total;

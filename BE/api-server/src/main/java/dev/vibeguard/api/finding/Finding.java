@@ -60,6 +60,10 @@ public class Finding {
     @Column
     private String snippet;
 
+    /** 매니페스트 경로 (requirements.txt 등) — SCA 대상 (V2). */
+    @Column(name = "manifest_path")
+    private String manifestPath;
+
     @Column(name = "package_name")
     private String packageName;
 
