@@ -1,7 +1,11 @@
 /**
- * 스캔 파이프라인 오케스트레이션 (PRD §6.1 상태머신).
+ * 스캔 파이프라인 오케스트레이션 (PRD §6.1 상태머신, 방향 전환 v2).
  *
- *   QUEUED → CLONING → SCANNING(A1) → VERIFYING(A2) → PATCHING(A3) → PR_CREATING(A4) → COMPLETED
+ *   QUEUED → CLONING → SCANNING(A1) → VERIFYING(A2) → REGRESSION_CHECK(A3) → PR_CREATING(A4) → COMPLETED
+ *
+ * A3(REGRESSION_CHECK): 재현 테스트를 만들지 않는다. 리포의 기존 테스트를
+ * 설치(②)→테스트(③, 패치 전) → 매니페스트 버전 상향 → 설치(②)→테스트(③, 패치 후)로
+ * 실행해 하위 호환(안 깨짐)을 증명한다.
  *
  * 각 에이전트는 독립 Claude Agent SDK 세션으로 구동하고, 단계 전이/로그를 HMAC 콜백으로
  * 서버에 알린다. 단계 간 전달은 구조화된 JSON 아티팩트(stageOutputs)로 명시적으로 넘긴다.

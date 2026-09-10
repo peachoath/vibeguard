@@ -7,7 +7,7 @@
  */
 
 /** 파이프라인 진행 단계와 매핑되는 스캔 상태(ScanStatus 문자열과 일치). */
-export type StageStatus = 'SCANNING' | 'VERIFYING' | 'PATCHING' | 'PR_CREATING'
+export type StageStatus = 'SCANNING' | 'VERIFYING' | 'REGRESSION_CHECK' | 'PR_CREATING'
 
 export interface AgentSpec {
   /** Agent 번호 1~4. */
@@ -32,12 +32,11 @@ export const AGENTS: AgentSpec[] = [
   {
     agentNo: 1,
     stage: 'SCANNING',
-    label: 'Scanner',
+    label: 'Scanner (SCA)',
     mcpServers: ['scanner'],
+    // 방향 전환 v2: SCA만. Trivy 단독(OSV-Scanner 이중 실행·Semgrep(SAST) 제거).
     allowedTools: [
       'mcp__scanner__run_trivy',
-      'mcp__scanner__run_osv',
-      'mcp__scanner__run_semgrep',
       'Read',
       'Grep',
       'Glob',
@@ -61,18 +60,20 @@ export const AGENTS: AgentSpec[] = [
   },
   {
     agentNo: 3,
-    stage: 'PATCHING',
-    label: 'Patcher',
+    stage: 'REGRESSION_CHECK',
+    label: 'Regression Checker',
     mcpServers: ['testrunner'],
+    // 방향 전환 v2: 재현 테스트 생성 없음. 설치(②)→테스트(③) 패치 전후.
+    // 패치는 매니페스트 버전 한 줄 수정만(Edit), 코드 리팩토링 없음.
     allowedTools: [
+      'mcp__testrunner__install',
       'mcp__testrunner__run_tests',
       'Read',
-      'Write',
       'Edit',
       'Grep',
       'Glob',
     ],
-    maxTurns: 30,
+    maxTurns: 20,
   },
   {
     agentNo: 4,
