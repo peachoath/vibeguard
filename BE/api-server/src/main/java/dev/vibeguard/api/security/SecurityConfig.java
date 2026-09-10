@@ -35,6 +35,8 @@ public class SecurityConfig {
                     "/", "/index.html", "/favicon.ico", "/error",
                     "/oauth2/**", "/login/**",
                     "/api/v1/auth/me",
+                    // 런너 콜백은 세션이 아니라 HMAC-SHA256 서명으로만 보호 (NFR-S4)
+                    "/api/v1/internal/runner/**",
                     "/actuator/health",
                     "/swagger-ui/**", "/v3/api-docs/**")
                 .permitAll()
