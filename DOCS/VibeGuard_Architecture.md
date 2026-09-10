@@ -5,15 +5,15 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v1.0 |
-| 최종 수정 | 2026-09-09 |
-| 관련 문서 | [PRD](./VibeGuard_PRD.md) · [BusinessModel](./VibeGuard_BusinessModel.md) · [TrustModel](./VibeGuard_TrustModel.md) |
+| 문서 버전 | **v2.0 (방향 전환: SAST→SCA, 회귀 증명, 컨테이너 3종)** |
+| 최종 수정 | 2026-09-10 |
+| 관련 문서 | [PRD](./VibeGuard_PRD.md) · [BusinessModel](./VibeGuard_BusinessModel.md) · [TrustModel](./VibeGuard_TrustModel.md) · [방향전환](./VibeGuard_방향전환.md) |
 
 ---
 
 ## 1. 개요
 
-VibeGuard는 GitHub 리포의 보안 취약점을 **탐지 → 검증 → TDD 증명 패치 → PR**까지 자동화하는 멀티 에이전트 시스템이다. 크게 **3티어**로 구성된다.
+VibeGuard는 GitHub 리포의 **취약 라이브러리를 탐지 → 위험도 검증·최소 안전 버전 결정 → 매니페스트 버전 상향 → 설치·회귀 테스트로 하위 호환 증명 → PR**까지 자동화하는 멀티 에이전트 의존성 보안 시스템이다. 크게 **3티어**로 구성된다.
 
 | 티어 | 런타임 | 역할 |
 |---|---|---|
@@ -75,14 +75,16 @@ graph TB
     end
 
     subgraph MCP["MCP Layer"]
-        SCAN["scanner-mcp<br/>Trivy·OSV·Semgrep"]
+        SCAN["scanner-mcp<br/>Trivy (SCA)"]
         ADV["advisory-mcp<br/>NVD·OSV·GHSA"]
         GHMCP["github-mcp<br/>(공식) 브랜치·PR"]
-        TEST["testrunner-mcp<br/>격리 테스트 실행"]
+        TEST["testrunner-mcp<br/>설치·테스트 컨테이너"]
     end
 
-    subgraph Infra["Sandbox Pool (Docker)"]
-        BOX["--network=none · --read-only<br/>--cap-drop=ALL · 300s"]
+    subgraph Infra["Sandbox — 컨테이너 3종 (역할별 네트워크 차등)"]
+        C1["① 스캔 Trivy<br/>네트워크 O · 코드 실행 X"]
+        C2["② 설치 pip<br/>네트워크 O(필수)"]
+        C3["③ 테스트 pytest<br/>네트워크 X(절대)"]
     end
 
     DB[("Supabase<br/>PostgreSQL 16")]
@@ -95,9 +97,11 @@ graph TB
     ORCH -->|"POST /scans (HTTP 위임)"| RUNNER
     RUNNER -->|"POST /internal/runner/events (HMAC)"| SSE
     RUNNER --> SCAN & ADV & GHMCP & TEST
-    SCAN --> BOX
-    TEST --> BOX
+    SCAN --> C1
+    TEST --> C2 & C3
 ```
+
+> 공통 격리(비특권 사용자·`--read-only`·`--cap-drop=ALL`·메모리/PID 상한·300s)는 3종 모두 유지. **남의 테스트 코드가 도는 ③ 테스트 컨테이너에만 네트워크가 없다.** Trivy DB·pip 캐시는 호스트에서 `:ro` 마운트(속도 목적).
 
 **포트 (개발 기준)**
 
@@ -118,13 +122,13 @@ graph TB
 stateDiagram-v2
     [*] --> QUEUED
     QUEUED --> CLONING
-    CLONING --> SCANNING : Agent 1
-    SCANNING --> VERIFYING : Agent 2
+    CLONING --> SCANNING : Agent 1 (Trivy)
+    SCANNING --> VERIFYING : Agent 2 (안전 버전 결정)
     SCANNING --> NO_FINDINGS
-    VERIFYING --> PATCHING : Agent 3
-    PATCHING --> PR_CREATING : Agent 4
-    PATCHING --> PATCH_FAILED : 재시도 초과
-    PATCHING --> REGRESSION_BLOCKED : 회귀 실패
+    VERIFYING --> REGRESSION_CHECK : Agent 3 (설치·회귀)
+    REGRESSION_CHECK --> PR_CREATING : Agent 4
+    REGRESSION_CHECK --> PATCH_FAILED : 재시도 2회 초과
+    REGRESSION_CHECK --> REGRESSION_BLOCKED : 패치 후 회귀 실패
     PR_CREATING --> COMPLETED
     CLONING --> FAILED
     SCANNING --> FAILED
@@ -135,52 +139,56 @@ stateDiagram-v2
     FAILED --> [*]
 ```
 
+> 테스트가 없는 리포는 `REGRESSION_CHECK`에서 회귀 증명 없이 통과(`NO_TESTS`)하고 A4로 진행한다.
+
 ### 4.2 에이전트별 책임과 MCP 매핑
 
 ```mermaid
 flowchart LR
-    A1["Agent 1<br/>Scanner"] --> A2["Agent 2<br/>Verifier"]
-    A2 --> A3["Agent 3<br/>Patcher (심장)"]
+    A1["Agent 1<br/>Scanner (SCA)"] --> A2["Agent 2<br/>Verifier (안전 버전)"]
+    A2 --> A3["Agent 3<br/>Regression Checker (심장)"]
     A3 --> A4["Agent 4<br/>PR Author"]
 
-    A1 -.->|scanner-mcp| M1[Trivy·OSV·Semgrep]
+    A1 -.->|scanner-mcp| M1[Trivy]
     A2 -.->|advisory-mcp| M2[NVD·OSV·GHSA]
-    A3 -.->|testrunner-mcp| M3[pytest 격리 실행]
+    A3 -.->|testrunner-mcp| M3[pip 설치 · pytest 실행]
     A4 -.->|github-mcp| M4[브랜치·PR]
 ```
 
 | Agent | 입력 | 산출물 | 허용 MCP 툴 (화이트리스트) |
 |---|---|---|---|
-| 1 Scanner | 클론 경로, 브랜치 | `findings[]` | `scanner__run_trivy/osv/semgrep` |
-| 2 Verifier | `findings[]` | `verified[]` (verdict, 권장버전) | `advisory__lookup_cve/query_osv/github_advisory/resolve_fixed_version` |
-| 3 Patcher | `verified[]` | `patches[]`, `test_runs[]` | `testrunner__run_tests` |
-| 4 PR Author | patches, 증거 | PR URL | `github__*` |
+| 1 Scanner | 클론 경로, 브랜치 | `findings[]` (SCA) | `scanner__run_trivy` |
+| 2 Verifier | `findings[]` | `verified[]` (verdict, 최소 안전 버전, majorJump) | `advisory__lookup_cve/query_osv/github_advisory/resolve_fixed_version` |
+| 3 Regression Checker | `verified[]` | `patches[]`, `test_runs[]` (설치·테스트 2회) | `testrunner__install`, `testrunner__run_tests` |
+| 4 PR Author | patches, 회귀 증거 | PR URL | `github__*` |
 
 > 단계 간 전달은 구조화된 JSON 아티팩트(`stage_output.json`)로 명시적 전달 — 컨텍스트 오염 방지, 재현성 확보 (PRD §5.3).
 
-### 4.3 Agent 3 — TDD 증명 루프 (Python 메인)
+### 4.3 Agent 3 — 설치 → 회귀 검증 루프 (Python 우선)
+
+**재현 테스트를 만들지 않는다.** 리포의 기존 테스트를 패치 전후로 실행해 하위 호환을 증명한다.
 
 ```mermaid
 flowchart TD
-    START([verified finding]) --> GEN[pytest 재현 테스트 작성]
-    GEN --> PRE{패치 전 실행}
-    PRE -->|PASS| FALSE["증명 불가<br/>(오탐 의심) → 정보성 Finding"]
-    PRE -->|FAIL 확인| PATCH[AI 패치 적용]
-    PATCH --> POST{패치 후 실행}
-    POST -->|FAIL| RETRY{재시도 < N?}
+    START([verified finding]) --> INST1["② 설치: pip install (패치 전 버전)"]
+    INST1 -->|설치 실패| IFAIL["INSTALL_FAILED<br/>스킵·로그 노출"]
+    INST1 --> PRE{"③ 테스트: pytest (패치 전)"}
+    PRE -->|테스트 없음| NOTESTS["NO_TESTS<br/>증명 없이 A4 진행"]
+    PRE -->|통과 = 기준선| PATCH["호스트: 매니페스트 버전 한 줄 상향"]
+    PATCH --> INST2["② 설치: 바뀐 패키지 업그레이드"]
+    INST2 --> POST{"③ 테스트: pytest (패치 후)"}
+    POST -->|깨짐| RETRY{"재시도 < 2? (버전 후보 낮춤)"}
     RETRY -->|예| PATCH
-    RETRY -->|아니오| PFAIL[PATCH_FAILED<br/>시도 이력 노출]
-    POST -->|PASS 확인| REG{회귀 테스트}
-    REG -->|1개라도 실패| BLOCK[REGRESSION_BLOCKED<br/>PR 차단]
-    REG -->|100% 통과| DONE([증명 완료 → Agent 4])
+    RETRY -->|아니오| BLOCK["REGRESSION_BLOCKED<br/>PR 차단"]
+    POST -->|통과 = 안 깨짐| DONE([하위 호환 증명 완료 → Agent 4])
 
     classDef bad fill:#3a1f22,stroke:#e5484d,color:#fff;
     classDef good fill:#1f3a24,stroke:#3e9b4f,color:#fff;
-    class FALSE,PFAIL,BLOCK bad;
-    class DONE good;
+    class IFAIL,BLOCK bad;
+    class DONE,NOTESTS good;
 ```
 
-> TDD 검증 계층은 **Python(pytest)** 을 1급 지원 언어로 고정하고 고도화한다. Java/Spring(JUnit)·JS/TS(Vitest/Jest)는 추후 개발 예정 (PRD §6.4).
+> 회귀 검증은 **Python(pytest)** 을 1급 지원한다. 이유는 재현 테스트 작성이 아니라 **의존성 설치·테스트 실행이 언어마다 달라 Python(`pip install`)이 가장 단순**하기 때문이다(PRD §6.4). 취약점 1건당 설치 2회 + 테스트 2회. 테스트 컨테이너만 네트워크 차단.
 
 ---
 
@@ -204,13 +212,13 @@ sequenceDiagram
     API-->>FE: 202 ScanDto
     FE->>API: GET /scans/:id/stream (SSE 구독)
 
-    R->>M: Agent1 스캔 (scanner-mcp, 격리)
+    R->>M: Agent1 Trivy 스캔 (scanner-mcp, ① 스캔 컨테이너)
     R->>API: POST /internal/runner/events (HMAC) stage=SCANNING
     API-->>FE: event: stage / finding
 
-    R->>M: Agent2 검증 (advisory-mcp)
-    R->>M: Agent3 pytest FAIL→패치→PASS→회귀 (testrunner-mcp)
-    R->>API: event: log (FAIL/PASS 로그)
+    R->>M: Agent2 검증 + 최소 안전 버전 결정 (advisory-mcp)
+    R->>M: Agent3 설치·테스트(전) → 버전 상향 → 설치·테스트(후) (testrunner-mcp)
+    R->>API: event: log (패치 전후 pytest 통과 로그)
 
     alt 회귀 통과
         R->>GH: Agent4 브랜치·PR 생성 (github-mcp)
@@ -261,23 +269,26 @@ erDiagram
     findings {
         uuid id PK
         uuid scan_id FK
-        string type "SCA|SAST"
+        string type "SCA (SAST는 추후)"
         string cve_id
-        string severity
+        string package_name
+        string current_version
+        string recommended_version
         string verdict "PATCH|IGNORE|MANUAL"
     }
     patches {
         uuid id PK
         uuid finding_id FK
-        text diff
-        text test_code
+        text diff "매니페스트 한 줄"
         smallint attempt_no
     }
     test_runs {
         uuid id PK
         uuid patch_id FK
-        string phase "PRE_PATCH|POST_PATCH|REGRESSION"
+        string phase "PRE_PATCH|POST_PATCH"
         boolean passed
+        int exit_code
+        string outcome "PASSED|FAILED|NO_TESTS|OOM_KILLED|TIMED_OUT|INSTALL_FAILED"
     }
     pull_requests {
         uuid id PK
@@ -300,7 +311,7 @@ erDiagram
     }
 ```
 
-> 스키마 원본은 `BE/api-server/src/main/resources/db/migration/V1__init.sql`. 변경은 Flyway 마이그레이션(`V2__…`)으로만 (PRD §10).
+> 스키마 원본은 `BE/api-server/src/main/resources/db/migration/V1__init.sql`. **방향 전환으로 `test_runs`에 `exit_code`·`outcome` 컬럼 추가 및 `patches.test_code` 제거가 필요하며, `V1`은 이미 배포되어 수정 금지이므로 반드시 신규 `V2__…` 마이그레이션으로 반영한다** (PRD §10).
 
 ---
 
@@ -313,19 +324,21 @@ flowchart TB
         R[Agent Runner]
         DB[(PostgreSQL)]
     end
-    subgraph Sandbox["격리 영역 (Docker Sandbox)"]
-        SB["스캐너·테스트 실행<br/>--network=none · --read-only<br/>--cap-drop=ALL · 300s"]
+    subgraph Sandbox["격리 영역 (컨테이너 3종, 역할별 네트워크 차등)"]
+        SB1["① 스캔/② 설치<br/>네트워크 O · 공통 격리"]
+        SB3["③ 테스트 pytest<br/>네트워크 X · 남의 코드 실행"]
     end
     subgraph Untrusted["신뢰 불가 (외부 리포 콘텐츠)"]
         REPO["클론된 리포<br/>README/주석 = 데이터로만 취급"]
     end
 
     API <-->|HMAC-SHA256 서명| R
-    R -->|제한된 Docker socket| SB
-    SB -->|읽기전용 마운트| REPO
+    R -->|제한된 Docker socket| SB1
+    R -->|제한된 Docker socket| SB3
+    SB3 -->|읽기전용 마운트| REPO
     API --> DB
 
-    note1["GitHub 토큰: AES-256-GCM 저장<br/>로그·SSE·에러에 노출 금지"]
+    note1["GitHub 토큰·API 키·Claude는<br/>컨테이너에 들어가지 않음 (AES-256-GCM 저장)"]
     API -.-> note1
 ```
 
@@ -333,9 +346,10 @@ flowchart TB
 |---|---|---|
 | 사용자 ↔ API | 세션 쿠키(HttpOnly), OAuth2 | §9, SecurityConfig |
 | API ↔ Runner | HMAC-SHA256 콜백 서명 | NFR-S4 |
-| Runner ↔ Sandbox | 네트워크 차단·읽기전용·권한 드롭 | NFR-S1 |
+| Runner ↔ Sandbox | 역할별 네트워크 차등 — **③ 테스트만 네트워크 차단**, 공통 격리(읽기전용·권한 드롭) 전부 유지 | NFR-S1 |
+| Sandbox 자체 | 적대적 공격 8종 실제 시도해 전부 차단 확인 (실측) | NFR-S9 |
 | Sandbox ↔ 리포 | 리포 콘텐츠는 데이터로만, 프롬프트 인젝션 방어 | NFR-S6 |
-| 토큰 저장 | AES-256-GCM, 노출 금지 | NFR-S3 |
+| 토큰 저장 | AES-256-GCM, 노출 금지, 컨테이너 미주입 | NFR-S3 |
 
 > 신뢰도 4축(검증·시스템·투명성·정직성) 상세는 [TrustModel](./VibeGuard_TrustModel.md) 및 PRD §11.4 참고.
 
@@ -360,13 +374,15 @@ mindmap
       Flyway
       Supabase PostgreSQL 16
     Agent
-      Node 22 + TS
+      Node 22 + TS (오케스트레이션)
+      Python (샌드박스 러너)
       Claude Agent SDK
       MCP SDK + zod
-      Express
+      Trivy (SCA)
+      pytest (회귀)
     Infra
       Docker / Compose
-      Sandbox Pool
+      컨테이너 3종 (스캔/설치/테스트)
       GitHub Actions
 ```
 
@@ -402,3 +418,4 @@ flowchart LR
 | [Architecture](./VibeGuard_Architecture.md) | 이 문서 — 시스템 구조·흐름·시각화 |
 | [BusinessModel](./VibeGuard_BusinessModel.md) | FREE / PRO 플랜, 과금 가치 |
 | [TrustModel](./VibeGuard_TrustModel.md) | 신뢰도 4축 상세, 플랜별 매핑 |
+| [방향전환](./VibeGuard_방향전환.md) | SAST→SCA 전환 배경·확정 사항 (최우선 근거) |
