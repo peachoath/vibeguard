@@ -1,6 +1,5 @@
 package dev.vibeguard.api.auth;
 
-import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -14,13 +13,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     @GetMapping("/me")
-    public ResponseEntity<Map<String, Object>> me(@AuthenticationPrincipal OAuth2User principal) {
+    public ResponseEntity<UserDto> me(@AuthenticationPrincipal OAuth2User principal) {
         if (principal == null) {
             return ResponseEntity.status(401).build();
         }
-        return ResponseEntity.ok(Map.of(
-            "githubId", ((Number) principal.getAttribute("id")).longValue(),
-            "login", principal.getAttribute("login"),
-            "avatarUrl", principal.getAttribute("avatar_url")));
+        Long githubId = ((Number) principal.getAttribute("id")).longValue();
+        return ResponseEntity.ok(new UserDto(
+            githubId,
+            principal.getAttribute("login"),
+            principal.getAttribute("avatar_url")));
     }
 }

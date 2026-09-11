@@ -29,6 +29,8 @@ val querydslVersion = "5.1.0"
 dependencies {
     // Web / API
     implementation("org.springframework.boot:spring-boot-starter-web")
+    // Boot 4에서 Jackson 자동구성(ObjectMapper 빈)은 별도 starter로 분리됨 → 명시 추가
+    implementation("org.springframework.boot:spring-boot-starter-json")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0")
 
