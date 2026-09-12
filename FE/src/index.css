@@ -1,25 +1,61 @@
 @import 'tailwindcss';
 
 /*
- * VibeGuard — Dark Security Console 테마 (PRD §8.2)
- * 심각도 색상은 접근성 대비 확보:
- *   Critical #E5484D / High #F76B15 / Medium #F5D90A / Low #3E9B4F
- * UI 폰트: Pretendard / 코드·로그: JetBrains Mono
+ * VibeGuard 디자인 토큰
+ * ─────────────────────────────────────────────────────────────
+ * 테마 전환 구조 (라이트/다크 토글 대비):
+ *   · 팔레트는 아래 :root(라이트=기본) / [data-theme='dark'] 두 블록에만 정의한다.
+ *   · 모든 컴포넌트는 색을 하드코딩하지 말고 var(--color-*) 만 참조한다.
+ *   · 토글은 <html>의 data-theme 속성 하나만 바꾸면 전체가 즉시 반영된다.
+ *       document.documentElement.dataset.theme = 'dark' | 'light'
+ *     (헬퍼: src/lib/theme.ts 의 applyTheme / toggleTheme / initTheme)
+ *
+ * @theme 에는 테마와 무관한 정적 토큰만 둔다(폰트·심각도 색).
  */
 @theme {
-  --color-bg: #0b0e14;
-  --color-surface: #12161f;
-  --color-border: #1e2430;
-  --color-fg: #e6e9ef;
-  --color-muted: #8b93a7;
-
   --color-severity-critical: #e5484d;
   --color-severity-high: #f76b15;
-  --color-severity-medium: #f5d90a;
+  --color-severity-medium: #eab308;
   --color-severity-low: #3e9b4f;
 
-  --font-sans: 'Pretendard', system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Pretendard', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
+}
+
+/* ── 라이트 테마 (기본) — 애플 스타일 뉴트럴 팔레트 ── */
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --color-bg: #ffffff;
+  --color-surface: #f5f5f7; /* 애플 시그니처 라이트 그레이 */
+  --color-border: #d2d2d7;
+  --color-fg: #1d1d1f; /* 애플 니어블랙 텍스트 */
+  --color-muted: #6e6e73; /* 보조 텍스트 */
+  --color-accent: #0071e3; /* 애플 블루 */
+
+  /* 대비 채움 버튼(주 버튼): 항상 배경의 반대 톤 */
+  --btn-fill: #1d1d1f;
+  --btn-fill-fg: #ffffff;
+
+  --shadow-elevated: 0 12px 32px -12px rgba(0, 0, 0, 0.18);
+}
+
+/* ── 다크 테마 — [data-theme='dark'] 에서만 오버라이드 ── */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-bg: #08090c;
+  --color-surface: #16171b;
+  --color-border: #2a2b31;
+  --color-fg: #f5f5f7;
+  --color-muted: #98989d;
+  --color-accent: #2997ff; /* 애플 다크 블루 */
+
+  --btn-fill: #ffffff;
+  --btn-fill-fg: #08090c;
+
+  --shadow-elevated: 0 12px 32px -12px rgba(0, 0, 0, 0.6);
 }
 
 html,
@@ -34,4 +70,185 @@ body {
   color: var(--color-fg);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* 테마 전환 시 급격한 색 점프 완화 */
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+/* ──────────────────────────────────────────────────────────
+ * 인증 화면 — 미니멀·애플 스타일 (여백/타이포 중심, 장식 최소화)
+ * ────────────────────────────────────────────────────────── */
+.auth-shell {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  /* 상단에서 은은하게 떨어지는 광원(accent 기반이라 두 테마 모두 자연스럽게). */
+  background:
+    radial-gradient(70% 55% at 50% -10%, color-mix(in srgb, var(--color-accent) 10%, transparent), transparent 70%),
+    var(--color-bg);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+  animation: auth-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes auth-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.auth-wordmark {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--color-fg);
+}
+
+.auth-tagline {
+  margin-top: 14px;
+  color: var(--color-muted);
+  font-size: 15px;
+  line-height: 1.55;
+  letter-spacing: -0.01em;
+}
+
+.auth-fineprint {
+  margin-top: 18px;
+  color: var(--color-muted);
+  font-size: 12.5px;
+  letter-spacing: -0.01em;
+}
+
+/* 기본(주) 버튼 — 대비 솔리드, 눌림/호버 미세 인터랙션 */
+.btn-primary {
+  margin-top: 30px;
+  width: 100%;
+  height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 13px;
+  background: var(--btn-fill);
+  color: var(--btn-fill-fg);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 590;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    opacity 0.16s ease;
+}
+.btn-primary:hover {
+  box-shadow: var(--shadow-elevated);
+}
+.btn-primary:active {
+  transform: scale(0.985);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+/* ──────────────────────────────────────────────────────────
+ * 앱 셸 헤더 — 프로스티드(반투명 블러) 상단바
+ * ────────────────────────────────────────────────────────── */
+.app-shell {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 22px;
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+}
+
+.app-brand {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-fg);
+  text-decoration: none;
+}
+
+.app-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  object-fit: cover;
+}
+
+.app-username {
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  color: var(--color-fg);
+}
+
+/* 고스트(보조) 버튼 — 애플식 알약형, 은은한 호버 */
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 980px;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-muted);
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    border-color 0.16s ease;
+}
+.btn-ghost:hover {
+  background: color-mix(in srgb, var(--color-fg) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-fg) 24%, transparent);
+  color: var(--color-fg);
+}
+.btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.app-main {
+  flex: 1;
+}
+
+.page-placeholder {
+  padding: 64px 32px;
+  color: var(--color-muted);
+  font-size: 15px;
+  letter-spacing: -0.01em;
 }

@@ -22,8 +22,19 @@ public class SecurityConfig {
     @Value("${vibeguard.cors.allowed-origins}")
     private String allowedOrigins;
 
-    public SecurityConfig(CustomOAuth2UserService oAuth2UserService) {
+    /**
+     * 로그인 성공 후 이동할 URL. 기본값 "/"(prod: FE·BE 동일 오리진).
+     * dev에서는 FE dev 서버가 별도 포트(:5173)이므로 .env의 POST_LOGIN_URI로
+     * http://localhost:5173/dashboard 처럼 절대 URL을 지정한다.
+     * 세션 쿠키는 host 기준(포트 무관)이라 :5173에서도 그대로 인증된다.
+     */
+    private final String postLoginUri;
+
+    public SecurityConfig(
+            CustomOAuth2UserService oAuth2UserService,
+            @Value("${vibeguard.app.post-login-uri:/}") String postLoginUri) {
         this.oAuth2UserService = oAuth2UserService;
+        this.postLoginUri = postLoginUri;
     }
 
     @Bean
@@ -43,7 +54,7 @@ public class SecurityConfig {
                 .anyRequest().authenticated())
             .oauth2Login(oauth2 -> oauth2
                 .userInfoEndpoint(userInfo -> userInfo.userService(oAuth2UserService))
-                .defaultSuccessUrl("/", true))
+                .defaultSuccessUrl(postLoginUri, true))
             .logout(logout -> logout
                 .logoutUrl("/api/v1/auth/logout")
                 .logoutSuccessHandler((request, response, authentication) ->
