@@ -31,12 +31,24 @@ public class User {
     @Column(name = "avatar_url")
     private String avatarUrl;
 
+    /** 사용자가 직접 편집하는 표시 이름. 미설정 시 login 을 대체로 사용(응답 계층에서 처리). */
+    @Column(name = "display_name")
+    private String displayName;
+
+    /** 사용자가 직접 편집하는 연락용 이메일. GitHub 이메일과 무관하게 관리한다. */
+    @Column(name = "email")
+    private String email;
+
     /** 암호화된 GitHub access token (평문 저장 금지). */
     @Column(name = "access_token", nullable = false)
     private String accessToken;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private OffsetDateTime createdAt;
+
+    /** 프로필/토큰 갱신 시각. INSERT 시 DB 기본값(now()), UPDATE 시 서비스에서 갱신. */
+    @Column(name = "updated_at", insertable = false)
+    private OffsetDateTime updatedAt;
 
     public User(Long githubId, String login, String avatarUrl, String accessToken) {
         this.id = UUID.randomUUID();

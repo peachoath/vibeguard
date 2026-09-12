@@ -26,6 +26,15 @@ public class GitHubClient {
             .build();
     }
 
+    /** 현재 인증 사용자의 GitHub 프로필 (login, avatar_url). 마이페이지 재동기화용. */
+    public GitHubUser getCurrentUser(String accessToken) {
+        return restClient.get()
+            .uri("/user")
+            .header("Authorization", "Bearer " + accessToken)
+            .retrieve()
+            .body(GitHubUser.class);
+    }
+
     /** 현재 사용자가 접근 가능한 리포 목록 (최신 갱신순, 최대 100개). */
     public List<GitHubRepoDto> listRepositories(String accessToken) {
         GitHubRepo[] repos = restClient.get()
@@ -40,6 +49,15 @@ public class GitHubClient {
         return Arrays.stream(repos)
             .map(r -> new GitHubRepoDto(r.id(), r.fullName(), r.defaultBranch(), r.language(), r.isPrivate()))
             .toList();
+    }
+
+    /** GitHub GET /user 응답 중 우리가 동기화하는 필드만. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record GitHubUser(
+        Long id,
+        String login,
+        @JsonProperty("avatar_url") String avatarUrl
+    ) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
