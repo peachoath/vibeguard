@@ -27,6 +27,8 @@ class UserServiceTest {
     @Mock UserSettingsRepository settingsRepository;
     @Mock GitHubClient gitHubClient;
     @Mock TokenCipher tokenCipher;
+    @Mock dev.vibeguard.api.repository.Repositories repositories;
+    @Mock dev.vibeguard.api.scan.ScanRepository scanRepository;
 
     @InjectMocks UserService userService;
 
@@ -108,6 +110,17 @@ class UserServiceTest {
         assertThat(result.minSeverity()).isEqualTo(Severity.LOW);
         assertThat(result.excludedPaths()).isEmpty();
         verify(settingsRepository).save(any(UserSettings.class));
+    }
+
+    @Test
+    void 통계는_연결_리포수와_스캔수를_반환한다() {
+        when(repositories.countByUserId(user.getId())).thenReturn(3L);
+        when(scanRepository.countByUser(user.getId())).thenReturn(11L);
+
+        UserStatsDto stats = userService.getStats(user);
+
+        assertThat(stats.repositoryCount()).isEqualTo(3L);
+        assertThat(stats.scanCount()).isEqualTo(11L);
     }
 
     @Test

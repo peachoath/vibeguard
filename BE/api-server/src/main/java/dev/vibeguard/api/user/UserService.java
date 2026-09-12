@@ -1,6 +1,8 @@
 package dev.vibeguard.api.user;
 
 import dev.vibeguard.api.repository.GitHubClient;
+import dev.vibeguard.api.repository.Repositories;
+import dev.vibeguard.api.scan.ScanRepository;
 import dev.vibeguard.api.security.TokenCipher;
 import java.time.OffsetDateTime;
 import org.springframework.stereotype.Service;
@@ -17,21 +19,34 @@ public class UserService {
     private final UserSettingsRepository settingsRepository;
     private final GitHubClient gitHubClient;
     private final TokenCipher tokenCipher;
+    private final Repositories repositories;
+    private final ScanRepository scanRepository;
 
     public UserService(
             UserRepository userRepository,
             UserSettingsRepository settingsRepository,
             GitHubClient gitHubClient,
-            TokenCipher tokenCipher) {
+            TokenCipher tokenCipher,
+            Repositories repositories,
+            ScanRepository scanRepository) {
         this.userRepository = userRepository;
         this.settingsRepository = settingsRepository;
         this.gitHubClient = gitHubClient;
         this.tokenCipher = tokenCipher;
+        this.repositories = repositories;
+        this.scanRepository = scanRepository;
     }
 
     /** 프로필 조회. */
     public UserProfileDto getProfile(User user) {
         return UserProfileDto.from(user);
+    }
+
+    /** 계정 요약 통계 (연결 리포 수·스캔 수). */
+    public UserStatsDto getStats(User user) {
+        return new UserStatsDto(
+            repositories.countByUserId(user.getId()),
+            scanRepository.countByUser(user.getId()));
     }
 
     /**

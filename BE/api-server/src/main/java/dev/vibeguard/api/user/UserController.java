@@ -40,6 +40,12 @@ public class UserController {
         return ResponseEntity.ok(userService.getProfile(currentUserService.require(principal)));
     }
 
+    /** 계정 요약 통계 (연결 리포 수·스캔 수). */
+    @GetMapping("/stats")
+    public ResponseEntity<UserStatsDto> getStats(@AuthenticationPrincipal OAuth2User principal) {
+        return ResponseEntity.ok(userService.getStats(currentUserService.require(principal)));
+    }
+
     /** 프로필 수정 (표시 이름·이메일). */
     @PatchMapping
     public ResponseEntity<UserProfileDto> updateProfile(
