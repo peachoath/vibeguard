@@ -62,7 +62,8 @@ describe('마이페이지', () => {
     await user.type(nameInput, 'Octo Cat')
     await user.click(screen.getByRole('button', { name: '변경사항 저장' }))
 
-    await waitFor(() => expect(screen.getByText('Octo Cat')).toBeInTheDocument())
+    // 저장 후 표시 이름이 화면(히어로·미리보기)에 반영된다.
+    await waitFor(() => expect(screen.getAllByText('Octo Cat').length).toBeGreaterThan(0))
   })
 
   it('환경설정 탭에서 테마를 선택할 수 있다', async () => {

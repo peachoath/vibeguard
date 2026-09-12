@@ -74,6 +74,7 @@ export function ProfileSection() {
             maxLength={255}
             onChange={(e) => setDisplayName(e.target.value)}
           />
+          <span className="tile-field-hint">비워두면 @{profile.login} 으로 표시돼요.</span>
         </label>
         <label className="tile-field">
           <span className="tile-field-label">이메일</span>
@@ -85,6 +86,20 @@ export function ProfileSection() {
             onChange={(e) => setEmail(e.target.value)}
           />
         </label>
+      </div>
+
+      <div className="preview-row">
+        <span className="preview-caption">미리보기</span>
+        <span className="preview-chip">
+          {profile.avatarUrl ? (
+            <img src={profile.avatarUrl} alt="" className="preview-chip-avatar" />
+          ) : (
+            <span className="preview-chip-avatar preview-chip-fallback">
+              {profile.login.charAt(0).toUpperCase()}
+            </span>
+          )}
+          <span className="preview-chip-name">{nameVal || profile.login}</span>
+        </span>
       </div>
 
       {error && <p className="section-error">{error}</p>}

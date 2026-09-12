@@ -21,6 +21,12 @@ export interface UserSettings {
   notifyEmail: boolean
 }
 
+/** GET /users/me/stats — 계정 요약 통계. */
+export interface UserStats {
+  repositoryCount: number
+  scanCount: number
+}
+
 /** PATCH /users/me — 부분 수정(보낸 필드만 반영, ""은 값 해제). */
 export interface UpdateProfileRequest {
   displayName?: string

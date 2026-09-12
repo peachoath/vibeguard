@@ -60,6 +60,11 @@ export const handlers = [
   http.get('/api/v1/users/me', () =>
     state.authed ? HttpResponse.json(state.profile) : new HttpResponse(null, { status: 401 }),
   ),
+  http.get('/api/v1/users/me/stats', () =>
+    state.authed
+      ? HttpResponse.json({ repositoryCount: 4, scanCount: 27 })
+      : new HttpResponse(null, { status: 401 }),
+  ),
   http.patch('/api/v1/users/me', async ({ request }) => {
     const body = (await request.json()) as { displayName?: string; email?: string }
     if (body.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(body.email)) {

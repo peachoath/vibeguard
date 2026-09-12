@@ -1,21 +1,29 @@
-import { Check, RefreshCw } from 'lucide-react'
+import { Check, LogOut, RefreshCw, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useDeleteAccount, useProfile, useResyncProfile } from '../useUser'
+import { startGitHubLogin, useLogout } from '@/features/auth/useAuth'
+import { useDeleteAccount, useProfile, useResyncProfile, useUserStats } from '../useUser'
 
-/** 계정 — GitHub 연동 상태·재동기화 + 위험 구역(회원 탈퇴). */
+/** 계정 — GitHub 연동 상태·통계·세션 + 위험 구역(회원 탈퇴). */
 export function AccountSection() {
   const { data: profile, isPending, isError } = useProfile()
+  const { data: stats } = useUserStats()
   const resync = useResyncProfile()
+  const logout = useLogout()
+  const navigate = useNavigate()
 
   if (isPending) return <div className="section section-loading">불러오는 중…</div>
   if (isError || !profile) return <p className="section-error">계정 정보를 불러오지 못했습니다.</p>
+
+  function handleLogout() {
+    logout.mutate(undefined, { onSuccess: () => navigate('/login', { replace: true }) })
+  }
 
   return (
     <div className="section">
       <header className="section-head">
         <h2 className="section-title">계정</h2>
-        <p className="section-sub">연결된 GitHub 계정과 위험 작업을 관리해요.</p>
+        <p className="section-sub">연결된 GitHub 계정과 세션·위험 작업을 관리해요.</p>
       </header>
 
       {/* GitHub 연동 카드 */}
@@ -43,6 +51,51 @@ export function AccountSection() {
           <RefreshCw size={13} className={resync.isPending ? 'spin' : undefined} />
           {resync.isPending ? '동기화 중…' : '재동기화'}
         </button>
+      </div>
+
+      {/* 계정 요약 통계 */}
+      <div className="stat-grid">
+        <div className="stat-cell">
+          <div className="stat-value">{stats?.repositoryCount ?? '—'}</div>
+          <div className="stat-label">연결된 리포</div>
+        </div>
+        <div className="stat-cell">
+          <div className="stat-value">{stats?.scanCount ?? '—'}</div>
+          <div className="stat-label">전체 스캔</div>
+        </div>
+        <div className="stat-cell">
+          <div className="stat-value stat-value-mono">{profile.githubId}</div>
+          <div className="stat-label">GitHub ID</div>
+        </div>
+      </div>
+
+      {/* 세션 */}
+      <div className="tile-group">
+        <div className="tile-row">
+          <div className="tile-row-text">
+            <span className="tile-row-title">GitHub 다시 연결</span>
+            <span className="tile-row-desc">권한(scope)을 갱신하거나 토큰을 새로 발급받아요.</span>
+          </div>
+          <button type="button" className="btn-ghost" onClick={startGitHubLogin}>
+            <RotateCcw size={13} />
+            다시 연결
+          </button>
+        </div>
+        <div className="tile-row">
+          <div className="tile-row-text">
+            <span className="tile-row-title">로그아웃</span>
+            <span className="tile-row-desc">이 기기에서 세션을 종료해요.</span>
+          </div>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={handleLogout}
+            disabled={logout.isPending}
+          >
+            <LogOut size={13} />
+            로그아웃
+          </button>
+        </div>
       </div>
 
       <DangerZone login={profile.login} />

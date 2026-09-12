@@ -6,12 +6,14 @@ import type {
   UpdateSettingsRequest,
   UserProfile,
   UserSettings,
+  UserStats,
 } from './types'
 
 // 서버 상태는 전부 TanStack Query로 관리 (AI_Learn_First §9). 마이페이지 = /users/me 계열.
 export const userKeys = {
   profile: ['user', 'profile'] as const,
   settings: ['user', 'settings'] as const,
+  stats: ['user', 'stats'] as const,
 }
 
 /** 프로필 조회 (GET /users/me). */
@@ -19,6 +21,15 @@ export function useProfile() {
   return useQuery({
     queryKey: userKeys.profile,
     queryFn: () => apiFetch<UserProfile>('/users/me'),
+    staleTime: 60_000,
+  })
+}
+
+/** 계정 요약 통계 (GET /users/me/stats). */
+export function useUserStats() {
+  return useQuery({
+    queryKey: userKeys.stats,
+    queryFn: () => apiFetch<UserStats>('/users/me/stats'),
     staleTime: 60_000,
   })
 }
