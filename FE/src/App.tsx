@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/features/auth/AppLayout'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { RequireAuth } from '@/features/auth/RequireAuth'
+import { MyPage } from '@/features/user/MyPage'
 
 /**
  * VibeGuard 앱 쉘. 화면 라우팅은 PRD §8 화면 정의 기준.
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/findings/:id" element={<Placeholder title="Finding 상세" />} />
           <Route path="/dashboard" element={<Placeholder title="대시보드" />} />
           <Route path="/history" element={<Placeholder title="스캔 이력" />} />
+          <Route path="/settings" element={<MyPage />} />
           <Route path="*" element={<Placeholder title="404" />} />
         </Route>
       </Route>
