@@ -59,7 +59,7 @@ export class Pipeline {
 
   /**
    * 단일 에이전트 세션 구동. ANTHROPIC_API_KEY가 없으면 실제 세션을 건너뛴다
-   * (MCP·키 준비 전에도 파이프라인 골격이 안전하게 돌도록 — 실제 구동은 #8 이후).
+   * (MCP·키 준비 전에도 파이프라인 골격이 안전하게 돌도록 — MCP 실구현 이후 실제 구동).
    */
   private async runAgent(
     agent: AgentSpec,
@@ -80,7 +80,7 @@ export class Pipeline {
     const chunks: string[] = []
 
     // 각 세션에 해당 단계 MCP만 주입 + allowedTools 화이트리스트 (PRD §5.3).
-    // mcpServers 실제 config 연결은 #8(MCP 실구현) 이후 채운다.
+    // mcpServers 실제 config 연결은 MCP 실구현 이후 채운다.
     const response = query({
       prompt,
       options: {

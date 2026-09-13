@@ -16,7 +16,7 @@ export interface AgentSpec {
   stage: StageStatus
   /** 사람이 읽는 단계명. */
   label: string
-  /** 이 세션에 주입할 MCP 서버 이름 목록 (#8에서 실제 config 연결). */
+  /** 이 세션에 주입할 MCP 서버 이름 목록 (MCP 실구현 시 실제 config 연결). */
   mcpServers: string[]
   /** 허용 툴 화이트리스트 (mcp__<server>__<tool> 형식 + 필요한 내장 툴). */
   allowedTools: string[]
@@ -26,7 +26,7 @@ export interface AgentSpec {
 
 /**
  * MVP 파이프라인의 4개 에이전트 정의.
- * allowedTools의 MCP 툴 이름은 자체 MCP 서버(#8) 구현과 일치해야 한다.
+ * allowedTools의 MCP 툴 이름은 자체 MCP 서버 구현과 일치해야 한다.
  */
 export const AGENTS: AgentSpec[] = [
   {
