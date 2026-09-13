@@ -12,6 +12,7 @@ export interface UserProfile {
   email: string | null
   avatarUrl: string | null
   createdAt: string
+  lastLoginAt: string | null
 }
 
 /** GET/PATCH /users/me/settings */

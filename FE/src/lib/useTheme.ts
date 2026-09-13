@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { getPreferences } from './preferences'
 import { applyThemePref, getStoredPref, resolveTheme, type ThemePref } from './theme'
 
 /**
@@ -20,8 +21,15 @@ export function useTheme() {
   const pref = useSyncExternalStore(subscribe, getStoredPref, () => 'light' as ThemePref)
 
   function setTheme(next: ThemePref) {
-    applyThemePref(next)
-    listeners.forEach((l) => l()) // 같은 탭 내 구독자 즉시 갱신
+    const apply = () => {
+      applyThemePref(next)
+      listeners.forEach((l) => l()) // 같은 탭 내 구독자 즉시 갱신
+    }
+    // View Transitions로 라이트↔다크 크로스페이드 (미지원/모션 줄이기 시 즉시 적용).
+    const vt = (document as Document & { startViewTransition?: (cb: () => void) => void })
+      .startViewTransition
+    if (vt && !getPreferences().reduceMotion) vt.call(document, apply)
+    else apply()
   }
 
   return { pref, resolved: resolveTheme(pref), setTheme }

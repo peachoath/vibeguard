@@ -1,5 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Segmented } from '@/components/Segmented'
+import { SaveButton } from '@/components/SaveButton'
+import { SectionSkeleton } from '@/components/Skeleton'
+import { toast } from '@/components/toast'
+import { useLeaveGuard } from '../leaveGuard'
 import type { Severity, UserSettings } from '../types'
 import { useSettings, useUpdateSettings } from '../useUser'
 
@@ -14,7 +18,7 @@ const SEVERITIES: { value: Severity; label: string }[] = [
 export function PolicySection() {
   const { data: settings, isPending, isError } = useSettings()
 
-  if (isPending) return <div className="section section-loading">불러오는 중…</div>
+  if (isPending) return <SectionSkeleton />
   if (isError || !settings) return <p className="section-error">설정을 불러오지 못했습니다.</p>
 
   return <PolicyForm initial={settings} />
@@ -22,18 +26,34 @@ export function PolicySection() {
 
 function PolicyForm({ initial }: { initial: UserSettings }) {
   const update = useUpdateSettings()
+  const { setDirty } = useLeaveGuard()
   const [excludedText, setExcludedText] = useState(initial.excludedPaths.join('\n'))
-  const [saved, setSaved] = useState(false)
+  const [success, setSuccess] = useState(false)
 
   const pathsDirty = excludedText !== initial.excludedPaths.join('\n')
+
+  useEffect(() => {
+    setDirty(pathsDirty)
+    return () => setDirty(false)
+  }, [pathsDirty, setDirty])
 
   function savePaths() {
     const excludedPaths = excludedText
       .split('\n')
       .map((s) => s.trim())
       .filter(Boolean)
-    setSaved(false)
-    update.mutate({ excludedPaths }, { onSuccess: () => setSaved(true) })
+    setSuccess(false)
+    update.mutate(
+      { excludedPaths },
+      {
+        onSuccess: () => {
+          setSuccess(true)
+          setTimeout(() => setSuccess(false), 1600)
+          toast.success('제외 경로를 저장했어요')
+        },
+        onError: () => toast.error('저장에 실패했어요'),
+      },
+    )
   }
 
   return (
@@ -52,7 +72,9 @@ function PolicyForm({ initial }: { initial: UserSettings }) {
           <Segmented<Severity>
             ariaLabel="최소 심각도"
             value={initial.minSeverity}
-            onChange={(v) => update.mutate({ minSeverity: v })}
+            onChange={(v) =>
+              update.mutate({ minSeverity: v }, { onSuccess: () => toast.success('최소 심각도를 변경했어요') })
+            }
             options={SEVERITIES}
           />
         </div>
@@ -73,15 +95,14 @@ function PolicyForm({ initial }: { initial: UserSettings }) {
       </div>
 
       <div className="section-actions">
-        <button
-          type="button"
-          className="btn-primary-sm"
+        <SaveButton
+          idleLabel="제외 경로 저장"
           onClick={savePaths}
-          disabled={!pathsDirty || update.isPending}
-        >
-          {update.isPending ? '저장 중…' : '제외 경로 저장'}
-        </button>
-        {saved && !pathsDirty && <span className="save-ok">저장됨 ✓</span>}
+          disabled={!pathsDirty}
+          pending={update.isPending}
+          success={success}
+        />
+        {pathsDirty && <span className="dirty-hint">저장 안 된 변경</span>}
       </div>
     </div>
   )

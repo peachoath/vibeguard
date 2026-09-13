@@ -1,46 +1,68 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { SaveButton } from '@/components/SaveButton'
+import { SectionSkeleton } from '@/components/Skeleton'
+import { toast } from '@/components/toast'
 import { ApiError } from '@/lib/api'
+import { membershipDuration } from '@/lib/datetime'
+import { useLeaveGuard } from '../leaveGuard'
 import { useProfile, useUpdateProfile } from '../useUser'
 
 /** 프로필 — 아바타/아이디 + 표시이름·이메일 인라인 수정. */
 export function ProfileSection() {
   const { data: profile, isPending, isError } = useProfile()
   const update = useUpdateProfile()
+  const { setDirty } = useLeaveGuard()
 
   const [displayName, setDisplayName] = useState<string | null>(null)
   const [email, setEmail] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
+  const [success, setSuccess] = useState(false)
 
-  if (isPending) return <SectionSkeleton />
-  if (isError || !profile) return <p className="section-error">프로필을 불러오지 못했습니다.</p>
+  const nameVal = displayName ?? profile?.displayName ?? ''
+  const emailVal = email ?? profile?.email ?? ''
+  const dirty = !!profile && (nameVal !== profile.displayName || emailVal !== (profile.email ?? ''))
 
-  // 편집 시작 전엔 서버값, 편집 후엔 로컬값을 표시.
-  const nameVal = displayName ?? profile.displayName
-  const emailVal = email ?? profile.email ?? ''
-  const dirty =
-    nameVal !== profile.displayName || emailVal !== (profile.email ?? '')
-
-  function save() {
-    setError(null)
-    setSaved(false)
+  const save = useCallback(() => {
+    setSuccess(false)
     update.mutate(
       { displayName: nameVal, email: emailVal },
       {
         onSuccess: () => {
-          setSaved(true)
           setDisplayName(null)
           setEmail(null)
+          setSuccess(true)
+          setTimeout(() => setSuccess(false), 1600)
+          toast.success('프로필을 저장했어요')
         },
         onError: (e) =>
-          setError(
+          toast.error(
             e instanceof ApiError && e.status === 400
-              ? '입력값을 확인해주세요 (이메일 형식 등).'
-              : '저장에 실패했습니다.',
+              ? '입력값을 확인해주세요 (이메일 형식 등)'
+              : '저장에 실패했어요',
           ),
       },
     )
-  }
+  }, [nameVal, emailVal, update])
+
+  // 저장 안 된 변경을 상위 가드에 동기화.
+  useEffect(() => {
+    setDirty(dirty)
+    return () => setDirty(false)
+  }, [dirty, setDirty])
+
+  // ⌘S / Ctrl+S 로 저장.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's' && dirty) {
+        e.preventDefault()
+        save()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [dirty, save])
+
+  if (isPending) return <SectionSkeleton />
+  if (isError || !profile) return <p className="section-error">프로필을 불러오지 못했습니다.</p>
 
   return (
     <div className="section">
@@ -60,7 +82,7 @@ export function ProfileSection() {
         <div>
           <div className="profile-hero-name">{profile.displayName}</div>
           <div className="profile-hero-login">@{profile.login}</div>
-          <div className="profile-hero-joined">가입일 {formatDate(profile.createdAt)}</div>
+          <div className="profile-hero-joined">{membershipDuration(profile.createdAt)}</div>
         </div>
       </div>
 
@@ -102,30 +124,10 @@ export function ProfileSection() {
         </span>
       </div>
 
-      {error && <p className="section-error">{error}</p>}
-
       <div className="section-actions">
-        <button
-          type="button"
-          className="btn-primary-sm"
-          onClick={save}
-          disabled={!dirty || update.isPending}
-        >
-          {update.isPending ? '저장 중…' : '변경사항 저장'}
-        </button>
-        {saved && !dirty && <span className="save-ok">저장됨 ✓</span>}
+        <SaveButton onClick={save} disabled={!dirty} pending={update.isPending} success={success} />
+        {dirty && <span className="dirty-hint">저장 안 된 변경 · ⌘S</span>}
       </div>
     </div>
   )
-}
-
-function SectionSkeleton() {
-  return <div className="section section-loading">불러오는 중…</div>
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
 }

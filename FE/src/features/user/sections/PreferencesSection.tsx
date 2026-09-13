@@ -3,7 +3,7 @@ import { Segmented } from '@/components/Segmented'
 import { Switch } from '@/components/Switch'
 import type { ThemePref } from '@/lib/theme'
 import { useTheme } from '@/lib/useTheme'
-import type { Density, DiffView } from '@/lib/preferences'
+import type { Density, DiffView, TimeZonePref } from '@/lib/preferences'
 import { usePreferences } from '@/lib/usePreferences'
 
 const FONT_SIZES = [12, 13, 14, 15]
@@ -92,6 +92,23 @@ export function PreferencesSection() {
             value={String(prefs.codeFontSize)}
             onChange={(v) => update({ codeFontSize: Number(v) })}
             options={FONT_SIZES.map((s) => ({ value: String(s), label: `${s}px` }))}
+          />
+        </div>
+
+        {/* 시간대 */}
+        <div className="tile-row tile-row-stack">
+          <div className="tile-row-text">
+            <span className="tile-row-title">시간대</span>
+            <span className="tile-row-desc">스캔·활동 시각을 어느 기준으로 표시할지.</span>
+          </div>
+          <Segmented<TimeZonePref>
+            ariaLabel="시간대"
+            value={prefs.timezone}
+            onChange={(v) => update({ timezone: v })}
+            options={[
+              { value: 'local', label: '로컬' },
+              { value: 'utc', label: 'UTC' },
+            ]}
           />
         </div>
 

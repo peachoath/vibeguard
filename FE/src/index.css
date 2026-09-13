@@ -873,3 +873,239 @@ body {
   font-weight: 550;
   letter-spacing: -0.01em;
 }
+
+/* ══════════════════════════════════════════════════════════
+ * 고도화 컴포넌트 — 토스트 · 스켈레톤 · 복사 · 저장 상태 · 슬라이드
+ * ══════════════════════════════════════════════════════════ */
+
+/* 토스트 */
+.toaster {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 12px 11px 14px;
+  border-radius: 12px;
+  background: var(--color-fg);
+  color: var(--color-bg);
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  box-shadow: var(--shadow-elevated);
+  animation: toast-in 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+.toast-icon {
+  display: inline-flex;
+}
+.toast-success .toast-icon {
+  color: var(--color-severity-low);
+}
+.toast-error .toast-icon {
+  color: var(--color-severity-critical);
+}
+.toast-msg {
+  max-width: 320px;
+}
+.toast-close {
+  display: inline-flex;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 2px;
+}
+.toast-close:hover {
+  opacity: 1;
+}
+
+/* 스켈레톤 shimmer */
+.skeleton {
+  display: block;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-fg) 6%, transparent) 25%,
+    color-mix(in srgb, var(--color-fg) 12%, transparent) 37%,
+    color-mix(in srgb, var(--color-fg) 6%, transparent) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* 복사 버튼 */
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.copy-btn:hover {
+  background: color-mix(in srgb, var(--color-fg) 8%, transparent);
+  color: var(--color-fg);
+}
+
+/* 저장 버튼 3단 상태 */
+.save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.save-btn.is-success {
+  background: var(--color-severity-low);
+}
+.dirty-hint {
+  font-size: 12.5px;
+  color: var(--color-muted);
+}
+
+/* 통계 셀 내 복사행 */
+.stat-value-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 탭 전환 방향 슬라이드 */
+.slide-fwd {
+  animation: slide-fwd 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.slide-back {
+  animation: slide-back 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes slide-fwd {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes slide-back {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+/* View Transitions 테마 크로스페이드 (기본 페이드 유지, 모션 줄이기 시 즉시) */
+:root[data-reduce-motion='true']::view-transition-old(root),
+:root[data-reduce-motion='true']::view-transition-new(root) {
+  animation: none;
+}
+
+/* ── 알림 섹션 ────────────────────────────────────────────── */
+.notif-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 510;
+  color: var(--color-muted);
+  letter-spacing: -0.01em;
+}
+.notif-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-border);
+  flex-shrink: 0;
+  transition: background 0.25s;
+}
+.notif-dot--on {
+  background: #34c759;
+}
+[data-theme='dark'] .notif-dot--on {
+  background: #30d158;
+}
+.notif-ch-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.notif-ch-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  color: var(--color-accent);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.notif-ch-icon--muted {
+  background: var(--color-border);
+  color: var(--color-muted);
+}
+.notif-chip {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 560;
+  padding: 1.5px 6px;
+  border-radius: 4px;
+  background: var(--color-border);
+  color: var(--color-muted);
+  margin-left: 7px;
+  vertical-align: middle;
+  letter-spacing: 0;
+}
+.notif-coming {
+  opacity: 0.48;
+  pointer-events: none;
+  user-select: none;
+}
+.notif-desc-warn {
+  color: var(--color-severity-high);
+}
+.notif-footer {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--color-muted);
+  letter-spacing: -0.01em;
+}
+.notif-footer-link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.notif-footer-link:hover {
+  opacity: 0.8;
+}

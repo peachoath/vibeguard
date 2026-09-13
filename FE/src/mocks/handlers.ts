@@ -14,6 +14,7 @@ const defaultProfile = {
   email: null as string | null,
   avatarUrl: 'https://avatars.githubusercontent.com/u/583231?v=4',
   createdAt: '2026-01-15T09:00:00Z',
+  lastLoginAt: new Date().toISOString(),
 }
 
 const defaultSettings = {
@@ -30,6 +31,13 @@ const state = {
 }
 
 function resetSession() {
+  state.authed = true
+  state.profile = { ...defaultProfile }
+  state.settings = { ...defaultSettings }
+}
+
+/** 테스트 간 공유 상태 초기화용 (setup.ts afterEach에서 호출). */
+export function resetMockState() {
   state.authed = true
   state.profile = { ...defaultProfile }
   state.settings = { ...defaultSettings }

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
+import { Toaster } from '@/components/Toaster'
 import { server } from '@/mocks/server'
 import { MyPage } from './MyPage'
 
@@ -14,8 +15,10 @@ function renderMyPage() {
       <MemoryRouter initialEntries={['/settings']}>
         <Routes>
           <Route path="/settings" element={<MyPage />} />
+          <Route path="/settings/:tab" element={<MyPage />} />
           <Route path="/login" element={<div>로그인 화면</div>} />
         </Routes>
+        <Toaster />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -87,5 +90,46 @@ describe('마이페이지', () => {
 
     await user.type(screen.getByPlaceholderText('octocat'), 'octocat')
     expect(del).toBeEnabled()
+  })
+
+  it('탈퇴 확인 후 /login 으로 이동한다', async () => {
+    const user = userEvent.setup()
+    renderMyPage()
+
+    await user.click(screen.getByRole('button', { name: '계정' }))
+    await user.click(await screen.findByRole('button', { name: '계정 삭제' }))
+    await user.type(screen.getByPlaceholderText('octocat'), 'octocat')
+    await user.click(screen.getByRole('button', { name: '영구 삭제' }))
+
+    await waitFor(() => expect(screen.getByText('로그인 화면')).toBeInTheDocument())
+  })
+
+  it('탈퇴 API 실패 시 에러 토스트가 표시된다', async () => {
+    server.use(
+      http.delete('/api/v1/users/me', () => new HttpResponse(null, { status: 500 })),
+    )
+    const user = userEvent.setup()
+    renderMyPage()
+
+    await user.click(screen.getByRole('button', { name: '계정' }))
+    await user.click(await screen.findByRole('button', { name: '계정 삭제' }))
+    await user.type(screen.getByPlaceholderText('octocat'), 'octocat')
+    await user.click(screen.getByRole('button', { name: '영구 삭제' }))
+
+    await waitFor(() => expect(screen.getByText('탈퇴 처리에 실패했어요')).toBeInTheDocument())
+  })
+
+  it('탈퇴 모달 취소 후 재오픈 시 입력값이 초기화된다', async () => {
+    const user = userEvent.setup()
+    renderMyPage()
+
+    await user.click(screen.getByRole('button', { name: '계정' }))
+    await user.click(await screen.findByRole('button', { name: '계정 삭제' }))
+    await user.type(screen.getByPlaceholderText('octocat'), 'octocat')
+    await user.click(screen.getByRole('button', { name: '취소' }))
+
+    await user.click(screen.getByRole('button', { name: '계정 삭제' }))
+    expect(screen.getByPlaceholderText('octocat')).toHaveValue('')
+    expect(screen.getByRole('button', { name: '영구 삭제' })).toBeDisabled()
   })
 })

@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom'
+import { Toaster } from '@/components/Toaster'
 import { AppLayout } from '@/features/auth/AppLayout'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { RequireAuth } from '@/features/auth/RequireAuth'
@@ -14,7 +15,9 @@ function Placeholder({ title }: { title: string }) {
 
 export default function App() {
   return (
-    <Routes>
+    <>
+      <Toaster />
+      <Routes>
       {/* 공개: 로그인 화면 (유일한 미인증 접근 경로) */}
       <Route path="/login" element={<LoginPage />} />
 
@@ -29,9 +32,11 @@ export default function App() {
           <Route path="/dashboard" element={<Placeholder title="대시보드" />} />
           <Route path="/history" element={<Placeholder title="스캔 이력" />} />
           <Route path="/settings" element={<MyPage />} />
+          <Route path="/settings/:tab" element={<MyPage />} />
           <Route path="*" element={<Placeholder title="404" />} />
         </Route>
       </Route>
-    </Routes>
+      </Routes>
+    </>
   )
 }

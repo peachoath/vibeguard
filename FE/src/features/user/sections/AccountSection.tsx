@@ -1,7 +1,11 @@
 import { Check, LogOut, RefreshCw, RotateCcw } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { CopyButton } from '@/components/CopyButton'
+import { SectionSkeleton } from '@/components/Skeleton'
+import { toast } from '@/components/toast'
 import { startGitHubLogin, useLogout } from '@/features/auth/useAuth'
+import { formatDate, relativeTime } from '@/lib/datetime'
 import { useDeleteAccount, useProfile, useResyncProfile, useUserStats } from '../useUser'
 
 /** 계정 — GitHub 연동 상태·통계·세션 + 위험 구역(회원 탈퇴). */
@@ -12,11 +16,18 @@ export function AccountSection() {
   const logout = useLogout()
   const navigate = useNavigate()
 
-  if (isPending) return <div className="section section-loading">불러오는 중…</div>
+  if (isPending) return <SectionSkeleton />
   if (isError || !profile) return <p className="section-error">계정 정보를 불러오지 못했습니다.</p>
 
   function handleLogout() {
     logout.mutate(undefined, { onSuccess: () => navigate('/login', { replace: true }) })
+  }
+
+  function handleResync() {
+    resync.mutate(undefined, {
+      onSuccess: () => toast.success('GitHub 프로필을 동기화했어요'),
+      onError: () => toast.error('동기화에 실패했어요'),
+    })
   }
 
   return (
@@ -39,15 +50,11 @@ export function AccountSection() {
             </div>
             <div className="connect-sub">
               @{profile.login} · 연결일 {formatDate(profile.createdAt)}
+              {profile.lastLoginAt && ` · 마지막 로그인 ${relativeTime(profile.lastLoginAt)}`}
             </div>
           </div>
         </div>
-        <button
-          type="button"
-          className="btn-ghost"
-          onClick={() => resync.mutate()}
-          disabled={resync.isPending}
-        >
+        <button type="button" className="btn-ghost" onClick={handleResync} disabled={resync.isPending}>
           <RefreshCw size={13} className={resync.isPending ? 'spin' : undefined} />
           {resync.isPending ? '동기화 중…' : '재동기화'}
         </button>
@@ -64,7 +71,10 @@ export function AccountSection() {
           <div className="stat-label">전체 스캔</div>
         </div>
         <div className="stat-cell">
-          <div className="stat-value stat-value-mono">{profile.githubId}</div>
+          <div className="stat-value-row">
+            <span className="stat-value stat-value-mono">{profile.githubId}</span>
+            <CopyButton value={String(profile.githubId)} label="GitHub ID" />
+          </div>
           <div className="stat-label">GitHub ID</div>
         </div>
       </div>
@@ -86,12 +96,7 @@ export function AccountSection() {
             <span className="tile-row-title">로그아웃</span>
             <span className="tile-row-desc">이 기기에서 세션을 종료해요.</span>
           </div>
-          <button
-            type="button"
-            className="btn-ghost"
-            onClick={handleLogout}
-            disabled={logout.isPending}
-          >
+          <button type="button" className="btn-ghost" onClick={handleLogout} disabled={logout.isPending}>
             <LogOut size={13} />
             로그아웃
           </button>
@@ -109,8 +114,23 @@ function DangerZone({ login }: { login: string }) {
   const del = useDeleteAccount()
   const navigate = useNavigate()
 
+  function closeModal() {
+    setOpen(false)
+    setConfirmText('')
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !del.isPending) closeModal() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, del.isPending])
+
   function confirmDelete() {
-    del.mutate(undefined, { onSuccess: () => navigate('/login', { replace: true }) })
+    del.mutate(undefined, {
+      onSuccess: () => navigate('/login', { replace: true }),
+      onError: () => toast.error('탈퇴 처리에 실패했어요'),
+    })
   }
 
   return (
@@ -139,14 +159,8 @@ function DangerZone({ login }: { login: string }) {
               autoFocus
               onChange={(e) => setConfirmText(e.target.value)}
             />
-            {del.isError && <p className="section-error">탈퇴 처리에 실패했어요. 다시 시도해주세요.</p>}
             <div className="modal-actions">
-              <button
-                type="button"
-                className="btn-ghost"
-                onClick={() => setOpen(false)}
-                disabled={del.isPending}
-              >
+              <button type="button" className="btn-ghost" onClick={closeModal} disabled={del.isPending}>
                 취소
               </button>
               <button
@@ -171,11 +185,4 @@ function GitHubMark() {
       <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z" />
     </svg>
   )
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
 }

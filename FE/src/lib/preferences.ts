@@ -10,12 +10,14 @@
  */
 export type DiffView = 'split' | 'inline'
 export type Density = 'comfortable' | 'compact'
+export type TimeZonePref = 'local' | 'utc'
 
 export interface Preferences {
   diffView: DiffView
   density: Density
   codeFontSize: number
   reduceMotion: boolean
+  timezone: TimeZonePref
 }
 
 const STORAGE_KEY = 'vg-prefs'
@@ -25,6 +27,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   density: 'comfortable',
   codeFontSize: 13,
   reduceMotion: false,
+  timezone: 'local',
 }
 
 export function getPreferences(): Preferences {
