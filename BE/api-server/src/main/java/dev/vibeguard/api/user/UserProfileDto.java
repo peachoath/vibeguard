@@ -13,7 +13,8 @@ public record UserProfileDto(
     String displayName,
     String email,
     String avatarUrl,
-    OffsetDateTime createdAt
+    OffsetDateTime createdAt,
+    OffsetDateTime lastLoginAt
 ) {
     public static UserProfileDto from(User user) {
         String displayName = user.getDisplayName() != null ? user.getDisplayName() : user.getLogin();
@@ -23,6 +24,7 @@ public record UserProfileDto(
             displayName,
             user.getEmail(),
             user.getAvatarUrl(),
-            user.getCreatedAt());
+            user.getCreatedAt(),
+            user.getLastLoginAt());
     }
 }

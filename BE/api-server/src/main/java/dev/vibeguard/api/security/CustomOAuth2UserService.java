@@ -34,14 +34,20 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         String avatarUrl = oauthUser.getAttribute("avatar_url");
         String encryptedToken = tokenCipher.encrypt(userRequest.getAccessToken().getTokenValue());
 
+        java.time.OffsetDateTime now = java.time.OffsetDateTime.now();
         userRepository.findByGithubId(githubId)
                 .map(existing -> {
                     existing.setLogin(login);
                     existing.setAvatarUrl(avatarUrl);
                     existing.setAccessToken(encryptedToken);
+                    existing.setLastLoginAt(now);
                     return existing;
                 })
-                .orElseGet(() -> userRepository.save(new User(githubId, login, avatarUrl, encryptedToken)));
+                .orElseGet(() -> {
+                    User created = new User(githubId, login, avatarUrl, encryptedToken);
+                    created.setLastLoginAt(now);
+                    return userRepository.save(created);
+                });
 
         return oauthUser;
     }

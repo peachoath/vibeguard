@@ -50,6 +50,10 @@ public class User {
     @Column(name = "updated_at", insertable = false)
     private OffsetDateTime updatedAt;
 
+    /** 마지막 로그인(OAuth 성공) 시각. 로그인 시마다 갱신. */
+    @Column(name = "last_login_at")
+    private OffsetDateTime lastLoginAt;
+
     public User(Long githubId, String login, String avatarUrl, String accessToken) {
         this.id = UUID.randomUUID();
         this.githubId = githubId;
