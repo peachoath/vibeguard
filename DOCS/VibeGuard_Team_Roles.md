@@ -54,7 +54,7 @@
 - 샌드박스 격리(NFR-S1)·프롬프트 인젝션 방어(NFR-S6)·적대적 검증(NFR-S9)
 
 ### 구체 작업 (방향 전환 반영)
-- **scanner-mcp**: Trivy 실제 컨테이너 실행·JSON 파싱 (Semgrep 제외, SCA만). Trivy DB 호스트 마운트(`:ro`, 속도)
+- **scanner-mcp**: Trivy 실제 컨테이너 실행·JSON 파싱 (Semgrep 제외, SCA만). Trivy DB 호스트 마운트(속도)
 - **advisory-mcp**: NVD/OSV/GHSA 실제 조회 + CVE 24h 캐싱 + **최소 안전 버전 결정 로직**(major 점프 회피)
 - **testrunner-mcp**: 컨테이너 3종으로 **설치 2회 + 테스트 2회** 실행. `outcome`(PASSED/FAILED/NO_TESTS/OOM_KILLED/TIMED_OUT/INSTALL_FAILED) 판정
   - stack enum에 **`python-pytest` 추가**(현재 java/node만 — 코드 이슈)
