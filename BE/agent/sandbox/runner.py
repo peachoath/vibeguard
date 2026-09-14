@@ -25,6 +25,10 @@ from dataclasses import dataclass
 # 실행에 네트워크가 필요 없다. 새 이미지 버전을 빌드하면 여기 한 곳만 바꾸면 된다.
 SANDBOX_IMAGE = "vibeguard-sandbox:0.1"
 
+# ① 스캔 컨테이너 이미지. image/Dockerfile.scan으로 빌드하며, 샌드박스 이미지 위에
+# 버전을 고정한 Trivy 바이너리만 얹었다. 설치·테스트에는 쓰지 않는다.
+SCAN_IMAGE = "vibeguard-scan:0.1"
+
 # 아키텍처를 명시적으로 고정한다. 팀원 일부가 ARM 맥을 쓰는데, 샌드박스는 모두에게
 # 동일하게 동작해야 하기 때문이다.
 SANDBOX_PLATFORM = "linux/amd64"
@@ -93,6 +97,10 @@ def run_in_sandbox(
     repo_path: str,
     artifacts_path: str,
     timeout: int = DEFAULT_TIMEOUT,
+    network: bool = False,
+    image: str = SANDBOX_IMAGE,
+    extra_mounts: list[tuple[str, str, str]] | None = None,
+    env: dict[str, str] | None = None,
 ) -> RunResult:
     """일회용으로 격리된 Docker 컨테이너 안에서 명령을 실행한다.
 
@@ -106,6 +114,15 @@ def run_in_sandbox(
             /out에 읽기·쓰기로 마운트되고, 없으면 새로 만든다.
         timeout: 실행을 강제 종료하기까지 기다리는 초. 시간이 지나면
             컨테이너를 지우고 결과에 timed_out을 표시한다.
+        network: 컨테이너에 네트워크를 줄지 여부. 기본값 False는 --network none이며,
+            이것이 안전한 쪽이다. v2의 컨테이너 3종 중 ① 스캔과 ② 설치만 True로 연다.
+            ③ 테스트는 남의 코드를 실행하므로 절대 열지 않는다(방향 전환 v2 원칙).
+        image: 사용할 이미지. 기본값은 설치·테스트용 샌드박스 이미지이며,
+            ① 스캔 컨테이너처럼 다른 도구가 필요한 역할만 바꿔 넘긴다.
+        extra_mounts: (호스트 경로, 컨테이너 경로, "ro"|"rw") 튜플 목록.
+            /venv·pip 캐시·Trivy DB 캐시처럼 역할별로만 필요한 마운트를 얹는다.
+            호스트 경로는 절대 경로로 바뀌며, 없으면 만들지 않는다(호출자 책임).
+        env: 컨테이너에 넘길 환경변수. 예: 설치된 패키지를 찾게 하는 PYTHONPATH.
 
     Returns:
         컨테이너의 종료 코드와 캡처된 stdout·stderr를 담은 RunResult.
@@ -147,9 +164,16 @@ def run_in_sandbox(
         "--rm",                            # 종료되면 컨테이너를 제거한다
         "--name", container_name,          # 시간 초과된 실행을 지울 수 있도록
         "--platform", SANDBOX_PLATFORM,
-        # 네트워크를 아예 없앤다. 이미지가 실행에 필요한 도구를 모두 품고 있으므로,
-        # 신뢰할 수 없는 코드는 외부로 연락할 수도 페이로드를 받아올 수도 없다.
-        "--network", "none",
+    ]
+
+    # 네트워크는 역할이 정한다. 기본값은 아예 없애는 쪽이다. 이미지가 실행에 필요한
+    # 도구를 모두 품고 있으므로, 신뢰할 수 없는 코드는 외부로 연락할 수도 페이로드를
+    # 받아올 수도 없다. 설치·스캔처럼 네트워크가 있어야만 되는 역할만 열어 준다.
+    # 여는 경우에도 나머지 격리(비특권 사용자·읽기 전용·cap-drop·자원 상한)는 그대로다.
+    if not network:
+        docker_cmd += ["--network", "none"]
+
+    docker_cmd += [
         # root를 버린다. 이미지가 바로 이 목적으로 사용자를 준비해 두었다.
         "--user", SANDBOX_USER,
         # 모든 리눅스 capability를 제거한다(NFR-S1). 비특권 사용자로 실행하는 것만으로도
@@ -173,8 +197,21 @@ def run_in_sandbox(
         "-v", repo_abs + ":" + REPO_MOUNT + ":ro",
         "-v", artifacts_abs + ":" + ARTIFACTS_MOUNT,
         "-w", REPO_MOUNT,
-        SANDBOX_IMAGE,
-    ] + command
+    ]
+
+    # 역할별 추가 마운트. /venv는 설치 컨테이너에서 rw, 테스트 컨테이너에서 ro로 얹혀
+    # 설치 결과를 다음 단계로 넘긴다. pip·Trivy 캐시는 속도 목적의 호스트 공유
+    # 디렉터리이며 :ro를 붙이지 않는다(2026-09-13 결정). 컨테이너 루트는 여전히
+    # 읽기 전용이라, 쓸 수 있는 곳은 여기서 명시한 마운트와 /tmp뿐이다.
+    for host_path, container_path, mode in (extra_mounts or []):
+        docker_cmd += ["-v", os.path.abspath(host_path) + ":" + container_path + ":" + mode]
+
+    # 환경변수. --target으로 설치한 패키지를 테스트 컨테이너가 찾게 하는 PYTHONPATH가
+    # 대표적인 쓰임이다. 값은 argv로 전달되므로 셸이 해석하지 않는다.
+    for key, value in (env or {}).items():
+        docker_cmd += ["-e", key + "=" + value]
+
+    docker_cmd += [image] + command
 
     try:
         proc = subprocess.run(
