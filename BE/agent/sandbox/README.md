@@ -19,12 +19,21 @@
 ## 무엇이 있나
 
     runner.py                     러너 본체. 백엔드는 run_in_sandbox(command,
-                                  repo_path, artifacts_path)만 호출하면 된다
+                                  repo_path, artifacts_path)만 호출하면 된다.
+                                  역할별로 network·image·extra_mounts·env를
+                                  선택 인자로 넘긴다(기본값은 가장 안전한 쪽)
+    cli.py                        scanner-mcp·testrunner-mcp가 부르는 입구.
+                                  표준입력 JSON → 표준출력 JSON.
+                                  run_trivy(①), install(②), run_tests(③)
+    test_cli.py                   outcome 판정·junit 파싱·Trivy 보고서 파싱 자체 검사
+                                  (도커 불필요)
     verify_hostile.py             5단계를 필요할 때 실행한다. fixtures/malicious_repo를
                                   샌드박스에 통과시킨 뒤 호스트 무결성을 재확인한다
-    image/Dockerfile              이미지 정의. 태그는 vibeguard-sandbox:0.1.
+    image/Dockerfile              설치·테스트 이미지. 태그는 vibeguard-sandbox:0.1.
                                   하위 폴더에 둔 이유는 빌드 컨텍스트에
                                   fixtures/malicious_repo가 딸려 들어가지 않게 하기 위함
+    image/Dockerfile.scan         스캔 이미지. 태그는 vibeguard-scan:0.1 (442MB).
+                                  위 이미지에 Trivy 0.74.0 바이너리만 얹었다
     fixtures/sample_repo/         검사에 쓰이는 픽스처 리포
       calculator.py               add()와, 0 나눗셈을 막지 않는 divide()
       conftest.py                 비어 있음. 리포 루트를 sys.path에 올린다
@@ -38,8 +47,25 @@
     cd BE/agent/sandbox
     python3 -m venv .venv                                               # 최초 1회
     docker build --platform linux/amd64 -t vibeguard-sandbox:0.1 image/
+    docker build --platform linux/amd64 -t vibeguard-scan:0.1 -f image/Dockerfile.scan image/   # 위 이미지를 먼저
     ./.venv/bin/python runner.py            # 검사 9종, 약 20초
     ./.venv/bin/python verify_hostile.py    # 5단계. 침해 시 0이 아닌 코드로 종료
+    ./.venv/bin/python test_cli.py          # 판정 로직 검사 (도커 불필요)
+
+CLI 입구는 이렇게 부른다. 호출자는 repoPath 하나만 넘기고, venv·artifacts는
+그 부모 폴더 아래에서 유도된다.
+
+    echo '{"tool":"run_trivy","repoPath":"/작업폴더/repo"}' | ./.venv/bin/python cli.py
+    echo '{"tool":"install","repoPath":"/작업폴더/repo",
+           "stack":"python-pytest","phase":"PRE_PATCH"}' | ./.venv/bin/python cli.py
+    echo '{"tool":"run_tests","repoPath":"/작업폴더/repo",
+           "stack":"python-pytest","phase":"PRE_PATCH"}' | ./.venv/bin/python cli.py
+
+`run_trivy`는 `OK`/`SCAN_FAILED`/`TIMED_OUT`과 `findings` 목록을 돌려준다. outcome을
+따로 두는 이유는 **실패한 스캔과 취약점 없는 리포를 구분하기 위해서다.** 둘 다 findings가
+비어 있지만, 앞의 것을 "안전"으로 읽으면 안 된다.
+`install`은 `OK`/`INSTALL_FAILED`를, `run_tests`는 `PASSED`/`FAILED`/`NO_TESTS`/
+`OOM_KILLED`/`TIMED_OUT`과 함께 `total`·`failed` 건수를 돌려준다.
 
 격리 플래그를 건드린 뒤에는 두 가지를 모두 실행할 것. `verify_hostile.py`는 알려진 무해
 2건에 해당하지 않는 공격이 성공했을 때, 디스크의 적대적 리포가 변경되었을 때, 컨테이너가
@@ -126,8 +152,36 @@ Dockerfile의 `chown 1000:1000 /out`은 `/out` 위에 아무것도 마운트되�
 메모리 폭탄은 상한이 아니라 인터프리터 오버헤드가 결과를 가르므로 통과와 실패를 오간다.
 `MEMORY_LIMIT`을 올릴 때는 이 요구량도 함께 올릴 것.
 
-v2에 맞춰 아직 안 바꾼 것(컨테이너 3종 분리, 네트워크 역할별 선택, 외부 호출 CLI 입구,
-outcome 판정 등)은 최상위 인수인계 문서 §7을 참고할 것 — 여기서는 되풀이하지 않는다.
+## 컨테이너 역할 (v2)
+
+| 역할 | 네트워크 | 마운트 | 담당 |
+|---|---|---|---|
+| ① 스캔 (Trivy) | **O** | Trivy DB 캐시 rw (`TMPDIR`도 여기) | `cli.py run_trivy` |
+| ② 설치 (pip) | **O** | `/venv` rw, pip 캐시 rw | `cli.py install` |
+| ③ 테스트 (pytest) | **X (절대)** | `/venv` ro | `cli.py run_tests` |
+
+공통 격리(비특권 사용자·`--read-only`·`--cap-drop=ALL`·메모리/PID 상한·300초)는 셋 다
+유지한다. 네트워크를 여는 ②에서도 나머지는 그대로다. 원칙은 하나다 — **남의 테스트
+코드가 도는 컨테이너에만 네트워크가 없다.**
+
+②와 ③은 `/venv` 마운트로 이어진다. 설치가 거기 쓰고(rw) 테스트가 거기서 읽는다(ro).
+테스트 컨테이너에는 네트워크가 없어 그 시점에 설치할 방법이 아예 없기 때문에 설치를
+따로 뗀 것이다. 의존성 없이 pytest를 돌리면 `ModuleNotFoundError`로 무너진다(실측).
+
+**스캔 컨테이너만 `TMPDIR`을 바꾼다.** Trivy는 DB 압축파일(113MB)을 임시 폴더에 받는데,
+샌드박스 `/tmp`는 64MB라 "공간 없음"으로 멈춘다(실측). 그래서 스캔 컨테이너만 임시 폴더를
+디스크에 있는 Trivy 캐시 마운트 아래로 돌렸다. `/tmp` 상한은 남의 코드가 디스크를 채우는
+공격을 막는 장치인데, 스캔 컨테이너는 남의 코드를 실행하지 않는다.
+
+**`fixedVersion`은 쉼표로 여러 개가 올 수 있다.** 예: `"2.0.6, 1.26.17"`. 버전 줄기마다
+고친 버전이 따로 나온 경우다. 러너는 문자열을 그대로 넘기며, 나눠 읽고 최소 안전 버전을
+고르는 일은 advisory-mcp의 몫이다.
+
+아직 안 한 것:
+
+- scanner-mcp·testrunner-mcp(TypeScript)에서 `cli.py`를 실제로 호출하는 연결
+- POST_PATCH의 증분 설치 (지금은 매번 전체 재설치)
+- 동시 스캔 3건(NFR-P2)이 같은 Trivy 캐시를 함께 쓸 때의 잠금·충돌 — **미검증**
 
 ## 언어에 대한 메모
 
@@ -146,3 +200,33 @@ outcome 판정 등)은 최상위 인수인계 문서 §7을 참고할 것 — �
   `verify_hostile.py` 재실행. 결과 완전히 동일: 검사 9종 전부 통과(1번은 의도된 실패
   1건 포함, `tests="3" failures="1"`), 적대적 리포 공격 11건 전부 차단(예상 밖 성공
   없음, 리포 파일 변경 없음, `backdoor.py` 없음, 잔류 컨테이너 없음), 종료 코드 0.
+- **2026-09-14** (역할별 컨테이너·CLI 입구 추가 후): 검사 9종과 `verify_hostile.py`를
+  다시 돌려 리팩터링 회귀가 없음을 확인. CLI는 임시 리포(`six==1.16.0` 의존)로 실측:
+
+  | 확인한 것 | 결과 |
+  |---|---|
+  | 설치 없이 테스트 | `ImportError` → 종료 코드 2 → `FAILED` (통과로 새지 않음) |
+  | `install` (네트워크 O) | `OK`, 휠 내려받아 `/venv`에 설치, 약 2초 |
+  | `run_tests` (설치 후) | `PASSED`, total 2 / failed 0 |
+  | 테스트 컨테이너 네트워크 | 컨테이너 안에서 접속 시도 → 차단 확인 |
+  | 테스트 컨테이너의 `/venv` | 쓰기 시도 → 읽기 전용으로 차단 확인 |
+  | 테스트 없는 리포 | `NO_TESTS` (종료 코드 5) |
+  | `requirements.txt` 없음 | 컨테이너를 띄우지 않고 `OK` |
+  | 설치 컨테이너 격리 | uid 1000 유지, 컨테이너 루트 쓰기 `PermissionError` |
+  | 잘못된 입력 | 스택 미지원·경로 없음 모두 JSON 오류로 거절, 종료 코드 1 |
+
+- **2026-09-14** (① 스캔 이미지·`run_trivy` 추가 후): 검사 9종·`verify_hostile.py`
+  재실행으로 회귀 없음 확인. 스캔은 `urllib3==1.24.1` 임시 리포로 실측:
+
+  | 확인한 것 | 결과 |
+  |---|---|
+  | 이미지 | `vibeguard-scan:0.1` 442MB, Trivy 0.74.0, uid 1000으로 실행 |
+  | 첫 스캔 (`/tmp` 64MB 그대로) | DB 압축파일이 `/tmp`를 채워 실패 → `SCAN_FAILED` (빈 목록이 "안전"으로 새지 않음) |
+  | 첫 스캔 (`TMPDIR` 수정 후) | `OK`, DB 다운로드 포함 **18초**, 캐시 1.3GB, 취약점 12건 |
+  | 캐시 찬 상태의 스캔 | `OK`, **1초**, 12건 동일 |
+  | 매니페스트 없는 리포 | `OK`, `findings: []` (실패와 구분됨) |
+  | 스캔 컨테이너 격리 | uid 1000, 루트·`/repo` 쓰기 차단, CapEff 0 |
+  | 잔류 컨테이너 | 없음 |
+
+  첫 DB 다운로드는 옛 기록(약 10분)과 달리 18초였다. 공통 제한시간 300초 안에 든다.
+  다만 네트워크가 느린 환경에서는 달라질 수 있다.
