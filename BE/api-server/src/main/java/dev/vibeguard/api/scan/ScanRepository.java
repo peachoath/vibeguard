@@ -23,4 +23,8 @@ public interface ScanRepository extends JpaRepository<Scan, UUID> {
     /** 완료된 스캔의 평균 소요 시간(ms). 없으면 null. */
     @Query("select avg(s.durationMs) from Scan s where s.durationMs is not null")
     Double averageDurationMs();
+
+    /** 7일 트렌드용: 특정 시각 이후의 스캔 목록. */
+    @Query("select s from Scan s where s.startedAt >= :since order by s.startedAt")
+    java.util.List<Scan> findByStartedAtAfter(@org.springframework.data.repository.query.Param("since") java.time.OffsetDateTime since);
 }
