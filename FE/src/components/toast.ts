@@ -1,35 +1,30 @@
-import { create } from 'zustand'
+export type ToastType = 'success' | 'error' | 'info' | 'warn'
+export interface ToastItem { id: string; message: string; type: ToastType }
 
-export type ToastKind = 'success' | 'error' | 'info'
+type Listener = (toasts: ToastItem[]) => void
+const listeners = new Set<Listener>()
+let items: ToastItem[] = []
 
-export interface Toast {
-  id: number
-  kind: ToastKind
-  message: string
+function emit() { listeners.forEach(l => l([...items])) }
+
+function show(message: string, type: ToastType, duration = 3500) {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+  items = [...items, { id, message, type }]
+  emit()
+  setTimeout(() => {
+    items = items.filter(t => t.id !== id)
+    emit()
+  }, duration)
 }
 
-interface ToastState {
-  toasts: Toast[]
-  push: (kind: ToastKind, message: string) => void
-  dismiss: (id: number) => void
+export function subscribe(listener: Listener): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
 }
 
-let seq = 0
-
-/** 전역 토스트 스토어. UI 상태이므로 Zustand (AI_Learn_First §9). */
-export const useToastStore = create<ToastState>((set) => ({
-  toasts: [],
-  push: (kind, message) => {
-    const id = ++seq
-    set((s) => ({ toasts: [...s.toasts, { id, kind, message }] }))
-    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 2600)
-  },
-  dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
-}))
-
-/** 어디서나 호출 가능한 간편 API. */
 export const toast = {
-  success: (m: string) => useToastStore.getState().push('success', m),
-  error: (m: string) => useToastStore.getState().push('error', m),
-  info: (m: string) => useToastStore.getState().push('info', m),
+  success: (message: string) => show(message, 'success'),
+  error:   (message: string) => show(message, 'error'),
+  info:    (message: string) => show(message, 'info'),
+  warn:    (message: string) => show(message, 'warn'),
 }
