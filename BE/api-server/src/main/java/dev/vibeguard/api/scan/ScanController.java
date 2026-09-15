@@ -72,6 +72,19 @@ public class ScanController {
         return emitter;
     }
 
+    /**
+     * PR 생성 승인 (F-04 검토 게이트).
+     * AWAITING_REVIEW → PR_CREATING 전이 후 런너에 A4 시작 신호 전달. 204 No Content.
+     */
+    @PostMapping("/{id}/approve")
+    public ResponseEntity<Void> approve(
+        @AuthenticationPrincipal OAuth2User principal,
+        @PathVariable UUID id) {
+        currentUserService.require(principal);
+        scanService.approvePr(id);
+        return ResponseEntity.noContent().build();
+    }
+
     /** 스캔 취소. 204 No Content. */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> cancel(

@@ -56,6 +56,28 @@ public class RunnerClient {
         log.info("[runner-client] 스캔 위임 완료 scanId={} ref={}", scanId, ref);
     }
 
+    /**
+     * PR 생성 승인 신호를 런너에 전달. 사용자가 검토 게이트를 통과시키면 A4 에이전트를 시작한다(F-04 §검토).
+     * 실패 시 예외를 던지므로 호출부(ScanService.approvePr)에서 트랜잭션 롤백.
+     */
+    public void approvePrCreation(String scanId) {
+        Map<String, Object> body = Map.of("scanId", scanId);
+        byte[] rawBody = serialize(body);
+        String signature = hmacSigner.sign(rawBody);
+        String timestamp = String.valueOf(System.currentTimeMillis());
+
+        restClient.post()
+            .uri("/scans/{id}/approve", scanId)
+            .header("Content-Type", "application/json")
+            .header("X-VibeGuard-Signature", signature)
+            .header("X-VibeGuard-Timestamp", timestamp)
+            .body(rawBody)
+            .retrieve()
+            .toBodilessEntity();
+
+        log.info("[runner-client] PR 생성 승인 위임 완료 scanId={}", scanId);
+    }
+
     private byte[] serialize(Map<String, Object> body) {
         try {
             return objectMapper.writeValueAsBytes(body);

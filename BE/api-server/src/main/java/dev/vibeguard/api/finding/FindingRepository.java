@@ -33,4 +33,7 @@ public interface FindingRepository extends JpaRepository<Finding, UUID> {
     /** 대시보드 심각도 분포 집계용. */
     @Query("select f.severity, count(f) from Finding f group by f.severity")
     java.util.List<Object[]> countBySeverity();
+
+    /** PATCHED 수 등 상태별 집계용. */
+    long countByStatus(FindingStatus status);
 }

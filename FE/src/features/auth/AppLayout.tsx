@@ -1,12 +1,14 @@
-import { LogOut } from 'lucide-react'
-import { Link, Outlet, useNavigate } from 'react-router-dom'
+import { LogOut, Moon, Sun } from 'lucide-react'
+import { useState } from 'react'
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { applyTheme, getActiveTheme, toggleTheme } from '@/lib/theme'
 import { useCurrentUser, useLogout } from './useAuth'
 
-/** 인증된 영역의 공통 셸. 상단 프로스티드 헤더에 사용자 정보 + 로그아웃을 노출한다. */
 export function AppLayout() {
   const { data: user } = useCurrentUser()
   const logout = useLogout()
   const navigate = useNavigate()
+  const [theme, setTheme] = useState(getActiveTheme)
 
   function handleLogout() {
     logout.mutate(undefined, {
@@ -14,23 +16,45 @@ export function AppLayout() {
     })
   }
 
+  function handleTheme() {
+    const next = applyTheme(toggleTheme())
+    setTheme(next)
+  }
+
   return (
     <div className="app-shell">
       <header className="app-header">
-        <Link to="/" className="app-brand">
-          VibeGuard
-        </Link>
+        <Link to="/" className="app-brand">VibeGuard</Link>
 
-        {user && (
-          <div className="app-user">
-            {user.avatarUrl && <img src={user.avatarUrl} alt="" className="app-avatar" />}
-            <span className="app-username">{user.login}</span>
-            <button type="button" className="btn-ghost" onClick={handleLogout} disabled={logout.isPending}>
-              <LogOut size={14} />
-              로그아웃
-            </button>
-          </div>
-        )}
+        {/* #7 내비게이션 링크 */}
+        <nav className="app-nav">
+          <NavLink to="/" end className={({ isActive }) => 'app-nav-link' + (isActive ? ' active' : '')}>
+            대시보드
+          </NavLink>
+          <NavLink to="/repositories" className={({ isActive }) => 'app-nav-link' + (isActive ? ' active' : '')}>
+            리포지토리
+          </NavLink>
+          <NavLink to="/history" className={({ isActive }) => 'app-nav-link' + (isActive ? ' active' : '')}>
+            스캔 이력
+          </NavLink>
+        </nav>
+
+        <div className="app-user">
+          {/* #9 테마 토글 */}
+          <button type="button" className="btn-ghost app-theme-btn" onClick={handleTheme} title={theme === 'dark' ? '라이트 모드' : '다크 모드'}>
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+          {user && (
+            <>
+              {user.avatarUrl && <img src={user.avatarUrl} alt="" className="app-avatar" />}
+              <span className="app-username">{user.login}</span>
+              <button type="button" className="btn-ghost" onClick={handleLogout} disabled={logout.isPending}>
+                <LogOut size={14} />
+                로그아웃
+              </button>
+            </>
+          )}
+        </div>
       </header>
 
       <div className="app-main">
