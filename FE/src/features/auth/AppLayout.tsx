@@ -23,8 +23,10 @@ export function AppLayout() {
 
         {user && (
           <div className="app-user">
-            {user.avatarUrl && <img src={user.avatarUrl} alt="" className="app-avatar" />}
-            <span className="app-username">{user.login}</span>
+            <Link to="/settings" className="app-userlink" title="내 계정">
+              {user.avatarUrl && <img src={user.avatarUrl} alt="" className="app-avatar" />}
+              <span className="app-username">{user.login}</span>
+            </Link>
             <button type="button" className="btn-ghost" onClick={handleLogout} disabled={logout.isPending}>
               <LogOut size={14} />
               로그아웃

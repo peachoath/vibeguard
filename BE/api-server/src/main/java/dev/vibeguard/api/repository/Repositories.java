@@ -16,4 +16,7 @@ public interface Repositories extends JpaRepository<Repository, UUID> {
     List<Repository> findByUserId(UUID userId);
 
     Optional<Repository> findByUserIdAndGithubRepoId(UUID userId, Long githubRepoId);
+
+    /** 사용자가 연결한 리포 수 (마이페이지 통계). */
+    long countByUserId(UUID userId);
 }

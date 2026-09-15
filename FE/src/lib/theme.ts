@@ -1,44 +1,60 @@
 /**
- * 라이트/다크 테마 스위치 헬퍼.
+ * 테마 스위치 헬퍼 — 라이트 / 다크 / 시스템(OS 연동) 3-모드.
  *
  * 색상은 index.css 의 :root / [data-theme='dark'] CSS 변수로 정의돼 있고,
  * 실제 전환은 <html>의 data-theme 속성 하나만 바꾸면 전체에 즉시 반영된다.
- * 향후 헤더에 토글 스위치를 붙일 때 이 모듈만 호출하면 된다.
- *
- * 예) const [theme, setTheme] = useState(getStoredTheme() ?? 'light')
- *     <button onClick={() => setTheme(applyTheme(toggleTheme()))}>…</button>
+ * '사용자 선택(pref)'은 3-모드이고, 실제 DOM에 반영되는 값(resolved)은 2-모드다.
+ * 마이페이지 환경설정 UI는 useTheme() 훅으로 이 모듈을 구독한다.
  */
-export type Theme = 'light' | 'dark'
+export type ThemePref = 'light' | 'dark' | 'system'
+export type ResolvedTheme = 'light' | 'dark'
 
 const STORAGE_KEY = 'vg-theme'
 
-/** 기본 테마. 현재 라이트 고정(추후 'system' 옵션 도입 시 이 값만 조정). */
-export const DEFAULT_THEME: Theme = 'light'
+/** 기본값: 라이트 — 애플/토스 톤의 밝고 깔끔한 기본. (사용자가 다크로 바꾸면 그 선택을 유지) */
+export const DEFAULT_PREF: ThemePref = 'light'
 
-/** localStorage에 저장된 사용자 선택 테마(없으면 null). */
-export function getStoredTheme(): Theme | null {
+/** localStorage에 저장된 사용자 선택(없으면 기본값). */
+export function getStoredPref(): ThemePref {
   const v = localStorage.getItem(STORAGE_KEY)
-  return v === 'light' || v === 'dark' ? v : null
+  return v === 'light' || v === 'dark' || v === 'system' ? v : DEFAULT_PREF
 }
 
-/** 현재 <html>에 적용된 테마. */
-export function getActiveTheme(): Theme {
-  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
+/** 현재 OS 다크모드 여부. */
+function systemTheme(): ResolvedTheme {
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-/** 테마를 DOM(<html data-theme>)에 적용하고 저장한다. 적용된 값을 반환. */
-export function applyTheme(theme: Theme): Theme {
-  document.documentElement.dataset.theme = theme
-  localStorage.setItem(STORAGE_KEY, theme)
-  return theme
+/** 선택(pref) → 실제 적용 테마(resolved). */
+export function resolveTheme(pref: ThemePref): ResolvedTheme {
+  return pref === 'system' ? systemTheme() : pref
 }
 
-/** 현재 테마의 반대 값을 계산해 반환(적용은 하지 않음). */
-export function toggleTheme(): Theme {
-  return getActiveTheme() === 'dark' ? 'light' : 'dark'
+/** 선택(pref)을 DOM(<html data-theme>)에만 반영. 저장은 하지 않는다. */
+function applyToDom(pref: ThemePref): void {
+  document.documentElement.dataset.theme = resolveTheme(pref)
 }
 
-/** 앱 부팅 시 1회 호출 — 저장된 테마(없으면 기본)를 적용한다. */
+/**
+ * 사용자의 명시적 선택을 저장하고 DOM에 반영. 저장된 선택을 반환.
+ * (기본값은 저장하지 않으므로, 사용자가 실제로 고른 값만 localStorage에 남는다.)
+ */
+export function applyThemePref(pref: ThemePref): ThemePref {
+  applyToDom(pref)
+  localStorage.setItem(STORAGE_KEY, pref)
+  return pref
+}
+
+/**
+ * 앱 부팅 시 1회 호출 — 저장된 선택(없으면 기본값)을 적용만 하고,
+ * '시스템' 모드일 때 OS 테마 변경을 실시간 반영하도록 리스너를 건다.
+ * 기본값을 저장하지 않으므로 DEFAULT_PREF 변경이 기존 사용자에게도 반영된다.
+ */
 export function initTheme(): void {
-  applyTheme(getStoredTheme() ?? DEFAULT_THEME)
+  applyToDom(getStoredPref())
+  window
+    .matchMedia?.('(prefers-color-scheme: dark)')
+    .addEventListener('change', () => {
+      if (getStoredPref() === 'system') applyToDom('system')
+    })
 }
