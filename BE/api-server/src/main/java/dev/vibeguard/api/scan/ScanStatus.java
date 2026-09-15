@@ -18,6 +18,8 @@ public enum ScanStatus {
     SCANNING,
     VERIFYING,
     REGRESSION_CHECK,
+    /** 회귀 검사 완료 후 사용자 검토 대기. 승인 시 PR_CREATING으로 전이. */
+    AWAITING_REVIEW,
     PR_CREATING,
     COMPLETED,
     NO_FINDINGS,

@@ -84,6 +84,33 @@ public class ScanService {
         applyTransition(scan, status);
     }
 
+    /** REGRESSION_CHECK 완료 후 사용자 검토 대기 상태로 전환. ScanEventHandler에서 호출. */
+    @Transactional
+    public void transitionToAwaitingReview(UUID scanId) {
+        Scan scan = scanRepository.findById(scanId)
+            .orElseThrow(() -> new NotFoundException("스캔을 찾을 수 없습니다: " + scanId));
+        if (!scan.getStatus().isTerminal() && scan.getStatus() != ScanStatus.AWAITING_REVIEW) {
+            scan.setStatus(ScanStatus.AWAITING_REVIEW);
+        }
+    }
+
+    /**
+     * 사용자 검토 승인 — AWAITING_REVIEW → PR_CREATING.
+     * 상태 전이 후 런너에 A4 시작 신호를 보낸다.
+     */
+    @Transactional
+    public void approvePr(UUID scanId) {
+        Scan scan = scanRepository.findById(scanId)
+            .orElseThrow(() -> new NotFoundException("스캔을 찾을 수 없습니다: " + scanId));
+        if (scan.getStatus() != ScanStatus.AWAITING_REVIEW) {
+            throw new ConflictException("검토 대기 상태의 스캔만 승인할 수 있습니다.");
+        }
+        scan.setStatus(ScanStatus.PR_CREATING);
+        // 트랜잭션 커밋 전 호출 — 런너 실패 시 롤백해 AWAITING_REVIEW 유지
+        runnerClient.approvePrCreation(scanId.toString());
+        log.info("[scan] PR 생성 승인 scanId={}", scanId);
+    }
+
     @Transactional
     public void markFailed(UUID scanId, String errorCode) {
         scanRepository.findById(scanId).ifPresent(scan -> {

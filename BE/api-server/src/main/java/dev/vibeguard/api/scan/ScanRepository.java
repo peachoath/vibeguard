@@ -28,4 +28,8 @@ public interface ScanRepository extends JpaRepository<Scan, UUID> {
     @Query("select count(s) from Scan s where s.repositoryId in "
         + "(select r.id from Repository r where r.userId = :userId)")
     long countByUser(UUID userId);
+
+    /** 7일 트렌드용: 특정 시각 이후의 스캔 목록. */
+    @Query("select s from Scan s where s.startedAt >= :since order by s.startedAt")
+    java.util.List<Scan> findByStartedAtAfter(@org.springframework.data.repository.query.Param("since") java.time.OffsetDateTime since);
 }

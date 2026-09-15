@@ -26,4 +26,11 @@ public class DashboardController {
         currentUserService.require(principal);
         return ResponseEntity.ok(dashboardService.summary());
     }
+
+    /** FE DashboardPage 용 통계. */
+    @GetMapping("/stats")
+    public ResponseEntity<StatsDto> stats(@AuthenticationPrincipal OAuth2User principal) {
+        currentUserService.require(principal);
+        return ResponseEntity.ok(dashboardService.stats());
+    }
 }

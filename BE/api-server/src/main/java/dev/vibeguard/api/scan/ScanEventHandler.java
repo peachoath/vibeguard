@@ -46,9 +46,30 @@ public class ScanEventHandler implements RunnerEventHandler {
     }
 
     private void handleStage(UUID scanId, RunnerEvent event) {
-        ScanStatus status = toStatus(event.stage());
+        String stageName = event.stage();
+        String stageStatus = event.status(); // RUNNING / DONE / FAILED
+
+        // REGRESSION_CHECK 완료 → 자동 PR 생성 대신 사용자 검토 대기로 전환
+        if ("REGRESSION_CHECK".equals(stageName) && "DONE".equals(stageStatus)) {
+            scanService.updateStatus(scanId, ScanStatus.REGRESSION_CHECK);
+            sseHub.broadcast(scanId, "stage", toPayload(event));
+            scanService.transitionToAwaitingReview(scanId);
+            sseHub.broadcast(scanId, "review", Map.of("scanId", scanId.toString()));
+            return;
+        }
+
+        // PR_CREATING 이벤트: approve 엔드포인트로 명시 승인된 경우에만 처리
+        if ("PR_CREATING".equals(stageName)) {
+            Scan scan = scanService.get(scanId);
+            if (scan.getStatus() != ScanStatus.PR_CREATING) {
+                log.debug("[scan-event] PR_CREATING 무시 — 미승인 상태={} scanId={}", scan.getStatus(), scanId);
+                return;
+            }
+        }
+
+        ScanStatus status = toStatus(stageName);
         if (status == null) {
-            log.warn("[scan-event] 매핑 불가한 stage={} scanId={}", event.stage(), scanId);
+            log.warn("[scan-event] 매핑 불가한 stage={} scanId={}", stageName, scanId);
             return;
         }
         scanService.updateStatus(scanId, status);
