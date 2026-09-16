@@ -23,8 +23,12 @@ npm run build
 
 ## 확인 스크립트
 
-`mcp/scripts/` 아래 두 개가 있다. **둘 다 API 키가 필요 없다.**
-준비물이 없으면 실패가 아니라 이유를 적고 건너뛴다(종료 코드 0).
+두 종류가 있고 보는 대상이 다르다. **셋 다 API 키가 필요 없고**, 준비물이 없으면
+실패가 아니라 이유를 적고 건너뛴다(종료 코드 0).
+
+### ① 서버 자체 확인 — `mcp/scripts/`
+
+서버가 제 일을 하는가를 본다. 도구를 실제로 호출한다.
 
 | 스크립트 | 무엇을 확인하나 | 준비물 |
 |---|---|---|
@@ -35,6 +39,20 @@ npm run build
 cd BE/agent
 node mcp/scripts/check-sandbox-mcp.mjs
 node mcp/scripts/check-advisory-mcp.mjs
+```
+
+### ② 러너 배선 확인 — `runner/scripts/`
+
+러너가 어느 세션에 어느 서버를 물려 주는가를 본다. 서버의 동작은 보지 않고,
+서버를 띄워 툴 목록만 받아 `allowedTools`와 대조한다. **도커도 네트워크도 필요 없다.**
+
+| 스크립트 | 무엇을 확인하나 | 준비물 |
+|---|---|---|
+| `check-mcp-wiring.mjs` | 단계별로 필요한 서버만 주입되는지, 도구 이름이 `mcp__<서버>__<도구>` 형식과 맞는지, Agent 2에 `run_tests`가 보이지 않는지 | 빌드된 `dist/` |
+
+```
+cd BE/agent
+node runner/scripts/check-mcp-wiring.mjs
 ```
 
 버전 비교·안전 버전 결정 로직만 따로 보는 검사는 네트워크도 도커도 필요 없다.
