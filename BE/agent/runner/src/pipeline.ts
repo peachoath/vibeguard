@@ -12,6 +12,7 @@
  */
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { AGENTS, type AgentSpec } from './agents.js'
+import { mcpServersFor } from './mcp-servers.js'
 import type { CallbackClient } from './callback.js'
 import type { RunnerConfig } from './config.js'
 
@@ -80,10 +81,11 @@ export class Pipeline {
     const chunks: string[] = []
 
     // 각 세션에 해당 단계 MCP만 주입 + allowedTools 화이트리스트 (PRD §5.3).
-    // mcpServers 실제 config 연결은 MCP 실구현 이후 채운다.
+    // 서버 실행 설정은 mcp-servers.ts가 만든다(경로·타임아웃·환경변수).
     const response = query({
       prompt,
       options: {
+        mcpServers: mcpServersFor(agent),
         allowedTools: agent.allowedTools,
         maxTurns: agent.maxTurns,
         permissionMode: 'default',
