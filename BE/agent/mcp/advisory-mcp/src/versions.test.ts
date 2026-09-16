@@ -42,4 +42,12 @@ const already = resolveFixedVersion('2.0.0', [{ id: 'X', fixedVersions: ['1.26.1
 assert.equal(already.recommended, null)
 assert.deepEqual(already.fixesAll.unfixable, ['X'])
 
+// 수정본이 커밋으로만 있는 취약점은 "수정본 없음"과 구분한다(OSV의 GIT 범위).
+const commitOnly = resolveFixedVersion('1.0.0', [
+  { id: 'CVE-1111-1111', fixedVersions: [], fixOnlyInCommits: true },
+  { id: 'CVE-2222-2222', fixedVersions: [] },
+])
+assert.deepEqual(commitOnly.fixesAll.fixVersionUnknown, ['CVE-1111-1111'])
+assert.deepEqual(commitOnly.fixesAll.unfixable, ['CVE-2222-2222'])
+
 console.log('통과: 버전 비교와 최소 안전 버전 결정이 약속대로 동작한다.')
