@@ -72,24 +72,92 @@ interface OsvVuln {
   details?: string
   severity?: { type: string; score: string }[]
   database_specific?: { severity?: string }
-  affected?: { package?: { name?: string; ecosystem?: string }; ranges?: { events?: { fixed?: string }[] }[] }[]
+  affected?: {
+    package?: { name?: string; ecosystem?: string }
+    // range.type은 ECOSYSTEM(버전) 또는 GIT(커밋). 둘의 fixed는 의미가 전혀 다르다.
+    ranges?: { type?: string; events?: { fixed?: string }[] }[]
+  }[]
+}
+
+/** 합쳐진 취약점 하나. VulnFix(계산에 쓰는 최소 형태)에 출처와 근거를 더한 것. */
+interface OsvSummary extends VulnFix {
+  /** 어느 DB의 어느 항목에서 왔는지. 합쳐도 출처를 잃지 않는다. */
+  sources: { db: string; id: string }[]
+  cvss?: string
+  /** GIT 범위로만 알려진 수정 커밋. 버전 비교에는 쓰지 않지만 버리지도 않는다. */
+  fixedCommits: string[]
+}
+
+function sourceDb(id: string): string {
+  const prefix = id.split('-')[0].toUpperCase()
+  return ['GHSA', 'PYSEC', 'CVE', 'OSV', 'GO', 'RUSTSEC'].includes(prefix) ? prefix : 'OSV'
 }
 
 /** OSV 응답에서 패치 판단에 필요한 만큼만 남긴다. details는 길어서 버린다. */
-function summarizeOsv(vuln: OsvVuln): VulnFix & { cvss?: string } {
-  const fixedVersions = (vuln.affected ?? []).flatMap((affected) =>
-    (affected.ranges ?? []).flatMap((range) =>
-      (range.events ?? []).map((event) => event.fixed).filter((fixed): fixed is string => Boolean(fixed)),
-    ),
-  )
+function summarizeOsv(vuln: OsvVuln): OsvSummary {
+  const versions: string[] = []
+  const commits: string[] = []
+  for (const affected of vuln.affected ?? []) {
+    for (const range of affected.ranges ?? []) {
+      for (const event of range.events ?? []) {
+        if (!event.fixed) continue
+        // GIT 범위의 fixed는 커밋 해시다. 버전으로 비교하면 "01220354..."가 메이저
+        // 1220354로 읽혀 상향 후보가 되어 버린다(실측: PYSEC-2023-192).
+        if (range.type === 'GIT') commits.push(event.fixed)
+        else versions.push(event.fixed)
+      }
+    }
+  }
+  const id = vuln.id
   return {
-    id: vuln.id,
-    aliases: vuln.aliases,
+    id,
+    sources: [{ db: sourceDb(id), id }],
+    aliases: vuln.aliases ?? [],
     summary: vuln.summary,
     severity: vuln.database_specific?.severity,
     cvss: vuln.severity?.[0]?.score,
-    fixedVersions: [...new Set(fixedVersions)],
+    fixedVersions: [...new Set(versions)],
+    fixedCommits: [...new Set(commits)],
   }
+}
+
+const unique = (list: string[]) => [...new Set(list)]
+
+/**
+ * 같은 취약점을 OSV가 GHSA와 PYSEC 두 건으로 돌려주는 일이 흔하다
+ * (실측: urllib3 1.24.1에서 24건이 실제로는 12건). 공통 CVE 번호로 묶는다.
+ *
+ * CVE가 없는 항목은 같다고 볼 근거가 없으므로 합치지 않고 단독으로 둔다.
+ * 합칠 때 정보를 잃지 않는다. 수정 버전은 합집합, 출처는 sources에 모두 남긴다.
+ */
+function mergeByCve(vulns: OsvSummary[]): OsvSummary[] {
+  const merged = new Map<string, OsvSummary>()
+  for (const vuln of vulns) {
+    const cve = [vuln.id, ...(vuln.aliases ?? [])].find((one) => one.toUpperCase().startsWith('CVE-'))
+    const key = cve ?? vuln.id
+    const found = merged.get(key)
+    if (!found) {
+      merged.set(key, {
+        ...vuln,
+        id: key,
+        aliases: unique([vuln.id, ...(vuln.aliases ?? [])]).filter((one) => one !== key),
+      })
+      continue
+    }
+    found.sources.push(...vuln.sources)
+    found.aliases = unique([...(found.aliases ?? []), vuln.id, ...(vuln.aliases ?? [])]).filter((one) => one !== key)
+    found.fixedVersions = unique([...found.fixedVersions, ...vuln.fixedVersions])
+    found.fixedCommits = unique([...found.fixedCommits, ...vuln.fixedCommits])
+    // 빈 쪽을 채운다. PYSEC 항목은 요약·심각도가 비어 있는 경우가 많다.
+    found.summary ??= vuln.summary
+    found.severity ??= vuln.severity
+    found.cvss ??= vuln.cvss
+  }
+  return [...merged.values()].map((vuln) => ({
+    ...vuln,
+    // 수정본이 커밋으로만 공개된 상태. "아직 수정본이 없다"와 구분해야 한다.
+    fixOnlyInCommits: vuln.fixedVersions.length === 0 && vuln.fixedCommits.length > 0,
+  }))
 }
 
 async function queryOsv(ecosystem: string, packageName: string, version: string) {
@@ -101,7 +169,7 @@ async function queryOsv(ecosystem: string, packageName: string, version: string)
       body: JSON.stringify({ package: { name: packageName, ecosystem: osvEcosystem }, version }),
     }),
   )) as { vulns?: OsvVuln[] }
-  return (data.vulns ?? []).map(summarizeOsv)
+  return mergeByCve((data.vulns ?? []).map(summarizeOsv))
 }
 
 const server = new McpServer({ name: 'advisory-mcp', version: '0.0.0' })

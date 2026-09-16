@@ -61,14 +61,23 @@ export interface VulnFix {
   summary?: string
   severity?: string
   fixedVersions: string[]
+  /** 수정본이 커밋으로만 알려진 상태. "수정본 없음"과 구분한다(OSV의 GIT 범위). */
+  fixOnlyInCommits?: boolean
 }
 
 export interface Resolution {
   current: string
   /** 메이저를 넘지 않는 상향. 이 버전으로도 남는 취약점은 unresolved에 적는다. */
   withinMajor: { version: string | null; unresolved: string[] }
-  /** 알려진 취약점을 전부 막는 상향. 고친 버전이 없는 취약점은 unfixable에 적는다. */
-  fixesAll: { version: string | null; majorJump: boolean; unfixable: string[] }
+  /** 알려진 취약점을 전부 막는 상향. 버전으로 못 막는 것은 아래 두 목록으로 나눠 적는다. */
+  fixesAll: {
+    version: string | null
+    majorJump: boolean
+    /** 아직 수정본이 나오지 않은 취약점. */
+    unfixable: string[]
+    /** 수정본이 커밋으로만 공개돼 버전을 알 수 없는 취약점. */
+    fixVersionUnknown: string[]
+  }
   /** 기본 추천: 메이저를 넘지 않는 쪽을 먼저 본다(하위 호환 우선). */
   recommended: string | null
   majorJump: boolean
@@ -77,6 +86,7 @@ export interface Resolution {
     severity?: string
     minimalFix: string | null
     minimalFixWithinMajor: string | null
+    fixOnlyInCommits: boolean
   }[]
 }
 
@@ -98,6 +108,7 @@ export function resolveFixedVersion(current: string, vulns: VulnFix[]): Resoluti
       severity: vuln.severity,
       minimalFix: upgrades[0] ?? null,
       minimalFixWithinMajor: upgrades.find((fix) => major(fix) === currentMajor) ?? null,
+      fixOnlyInCommits: vuln.fixOnlyInCommits ?? false,
     }
   })
 
@@ -121,7 +132,9 @@ export function resolveFixedVersion(current: string, vulns: VulnFix[]): Resoluti
       version: fixesAllVersion,
       majorJump: fixesAllVersion !== null && major(fixesAllVersion) > currentMajor,
       // 아직 고친 버전이 나오지 않은 취약점. 상향으로는 못 막는다.
-      unfixable: perVuln.filter((one) => one.minimalFix === null).map((one) => one.id),
+      unfixable: perVuln.filter((one) => one.minimalFix === null && !one.fixOnlyInCommits).map((one) => one.id),
+      // 수정본이 커밋으로만 있는 취약점. 조용히 "수정본 없음"으로 뭉뚱그리지 않는다.
+      fixVersionUnknown: perVuln.filter((one) => one.fixOnlyInCommits).map((one) => one.id),
     },
     recommended,
     majorJump: recommended !== null && major(recommended) > currentMajor,
