@@ -7,6 +7,10 @@ export interface RunnerConfig {
   apiBaseUrl: string
   callbackSecret: string
   anthropicApiKey: string | undefined
+  /** 에이전트 세션이 쓰는 모델. 별칭('haiku'·'sonnet'·'opus') 또는 모델 ID. */
+  agentModel: string
+  /** 세션 1개당 비용 상한(USD). 넘으면 SDK가 세션을 중단한다. */
+  agentMaxBudgetUsd: number
 }
 
 export function loadConfig(): RunnerConfig {
@@ -16,5 +20,7 @@ export function loadConfig(): RunnerConfig {
     apiBaseUrl: process.env.API_BASE_URL ?? 'http://localhost:8080',
     callbackSecret: process.env.RUNNER_CALLBACK_SECRET ?? 'dev-secret-change-me',
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+    agentModel: process.env.AGENT_MODEL ?? 'sonnet',
+    agentMaxBudgetUsd: Number(process.env.AGENT_MAX_BUDGET_USD ?? 0.5),
   }
 }
