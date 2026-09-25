@@ -1,0 +1,20 @@
+# VibeGuard ① 스캔 컨테이너 이미지.
+#
+# 샌드박스 이미지 위에 Trivy 바이너리 하나만 얹는다. 비특권 사용자(uid 1000)와
+# 마운트 지점을 그대로 물려받으므로, 격리 설정을 설치·테스트 컨테이너와 똑같이 쓸 수 있다.
+# Trivy 공식 이미지를 그대로 쓰지 않는 이유가 이것이다.
+#
+# 샌드박스 이미지를 먼저 빌드해야 한다. 저장소 루트에서:
+#   docker build --platform linux/amd64 -t vibeguard-sandbox:0.1 BE/agent/sandbox/image/
+#   docker build --platform linux/amd64 -t vibeguard-scan:0.1 \
+#       -f BE/agent/sandbox/image/Dockerfile.scan BE/agent/sandbox/image/
+#
+# 취약점 DB는 이미지에 굽지 않는다(전개 후 1.3GB). 호스트 캐시를 마운트한다.
+
+# Trivy 버전을 정확히 고정한다. 버전이 바뀌면 같은 리포에서 탐지 결과가 달라질 수 있고,
+# 그러면 어제 찾은 취약점이 오늘 사라지는 일이 분석 대상과 무관한 이유로 생긴다.
+FROM --platform=linux/amd64 aquasec/trivy:0.74.0 AS trivy
+
+FROM vibeguard-sandbox:0.1
+
+COPY --from=trivy /usr/local/bin/trivy /usr/local/bin/trivy
