@@ -1,0 +1,28 @@
+# 운영 프로파일 (SPRING_PROFILES_ACTIVE=prod)
+# 기본 application.yml 위에 얹혀 운영 안전값으로 오버라이드한다.
+# DB·OAuth·토큰키·CORS 등 값은 모두 환경변수로 주입한다(application.yml 참조).
+
+springdoc:
+  # 운영에서는 API 문서/Swagger UI를 노출하지 않는다(공격 표면 축소).
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # 운영에서는 health/info만 외부 노출. metrics/prometheus는 내부 수집기에서만.
+        include: health,info
+  endpoint:
+    health:
+      # 운영에서는 상세 정보를 노출하지 않는다(DB·디스크 등 내부 상태 은닉).
+      show-details: never
+
+# 운영 로깅: 애플리케이션은 INFO, SQL 로깅은 끔.
+logging:
+  level:
+    root: INFO
+    dev.vibeguard: INFO
+    org.hibernate.SQL: WARN

@@ -40,6 +40,8 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      # 운영 배포 시 .env에서 SPRING_PROFILES_ACTIVE=prod 로 지정(Swagger·상세 health 비노출).
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
       # DB: 기본은 컨테이너 내 postgres. Supabase로 붙이려면 .env에서 DB_URL 등을 오버라이드.
       DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/vibeguard}
       DB_USER: ${DB_USER:-vibeguard}
