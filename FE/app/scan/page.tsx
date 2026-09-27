@@ -15,12 +15,25 @@ interface ScanDto {
   status: string;
 }
 
-interface SseEvent {
-  kind: "stage" | "log" | "done";
-  stage?: string;
-  status?: string;
+interface SseStageEvent {
+  scanId: string;
+  kind: "stage";
+  stage: string;
   agent?: number;
-  payload?: Record<string, unknown>;
+  status?: string;
+}
+
+interface SseLogEvent {
+  scanId: string;
+  kind: "log";
+  agent?: number;
+  payload: { level: string; message: string; ts: string };
+}
+
+interface SseDoneEvent {
+  scanId: string;
+  kind: "done";
+  status?: string;
 }
 
 const STAGE_ORDER = ["CLONING", "SCANNING", "VERIFYING", "REGRESSION_CHECK", "PR_CREATING"];
@@ -65,24 +78,41 @@ function ScanContent() {
   }, [repoId, ref]);
 
   function subscribeStream(scanId: string) {
+    // SseHub.broadcast()는 named events(event: stage, event: log, event: done)를 전송한다.
+    // EventSource.onmessage는 unnamed events(event 헤더 없음)에만 반응하므로
+    // 반드시 addEventListener로 각 이벤트를 수신해야 한다.
     const es = new EventSource(apiSseUrl(`/api/v1/scans/${scanId}/stream`), { withCredentials: true });
     esRef.current = es;
 
-    es.onmessage = (e) => {
-      const evt: SseEvent = JSON.parse(e.data);
-      if (evt.kind === "stage" && evt.stage) {
+    es.addEventListener("stage", (e: MessageEvent) => {
+      const evt: SseStageEvent = JSON.parse(e.data);
+      if (evt.stage) {
         setCurrentStage(evt.stage);
-        setStageStatus((prev) => ({ ...prev, [evt.stage!]: evt.status ?? "RUNNING" }));
-      } else if (evt.kind === "log" && evt.payload) {
-        const p = evt.payload as { level: string; message: string; ts: string };
-        setLogs((prev) => [...prev.slice(-100), { ts: p.ts, agent: evt.agent ?? 0, level: p.level, message: p.message }]);
-      } else if (evt.kind === "done") {
-        setDone(true);
-        setFinalStatus(evt.status ?? "COMPLETED");
-        es.close();
+        setStageStatus((prev) => ({ ...prev, [evt.stage]: evt.status ?? "RUNNING" }));
       }
+    });
+
+    es.addEventListener("log", (e: MessageEvent) => {
+      const evt: SseLogEvent = JSON.parse(e.data);
+      if (evt.payload) {
+        setLogs((prev) => [
+          ...prev.slice(-100),
+          { ts: evt.payload.ts, agent: evt.agent ?? 0, level: evt.payload.level, message: evt.payload.message },
+        ]);
+      }
+    });
+
+    es.addEventListener("done", (e: MessageEvent) => {
+      const evt: SseDoneEvent = JSON.parse(e.data);
+      setDone(true);
+      setFinalStatus(evt.status ?? "COMPLETED");
+      es.close();
+    });
+
+    es.onerror = () => {
+      // 연결 오류 시 닫기. 재연결은 브라우저 기본 동작에 맡기지 않고 명시적으로 차단.
+      es.close();
     };
-    es.onerror = () => es.close();
   }
 
   const stageIndex = STAGE_ORDER.indexOf(currentStage);
