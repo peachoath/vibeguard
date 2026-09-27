@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import PageTransition from "./components/page-transition";
+import { AuthProvider } from "./components/auth-provider";
 
 export const metadata: Metadata = {
   title: "VibeGuard",
@@ -13,7 +14,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko" data-scroll-behavior="smooth">
-      <body><PageTransition>{children}</PageTransition></body>
+      <body>
+        <AuthProvider>
+          <PageTransition>{children}</PageTransition>
+        </AuthProvider>
+      </body>
     </html>
   );
 }

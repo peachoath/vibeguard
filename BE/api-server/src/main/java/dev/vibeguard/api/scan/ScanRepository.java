@@ -11,6 +11,11 @@ public interface ScanRepository extends JpaRepository<Scan, UUID> {
 
     List<Scan> findByRepositoryIdOrderByCreatedAtDesc(UUID repositoryId);
 
+    @Query("select s from Scan s where s.repositoryId in "
+        + "(select r.id from Repository r where r.userId = :userId) "
+        + "order by s.createdAt desc limit 50")
+    List<Scan> findTop50ByUser(UUID userId);
+
     /** 동일 repo+ref로 진행 중(비종료) 스캔이 있는지 — 중복 스캔 방지(409)에 사용. */
     boolean existsByRepositoryIdAndRefAndStatusIn(UUID repositoryId, String ref, Collection<ScanStatus> statuses);
 

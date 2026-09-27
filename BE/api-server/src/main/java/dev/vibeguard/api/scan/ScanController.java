@@ -34,6 +34,17 @@ public class ScanController {
         this.sseHub = sseHub;
     }
 
+    /** 내 스캔 목록 (최신순 50건). */
+    @GetMapping
+    public ResponseEntity<java.util.List<ScanDto>> list(
+        @AuthenticationPrincipal OAuth2User principal) {
+        User user = currentUserService.require(principal);
+        java.util.List<ScanDto> dtos = scanService.listByUser(user).stream()
+            .map(ScanDto::from)
+            .toList();
+        return ResponseEntity.ok(dtos);
+    }
+
     /** 스캔 시작 — 비동기 위임. 202 Accepted. */
     @PostMapping
     public ResponseEntity<ScanDto> create(

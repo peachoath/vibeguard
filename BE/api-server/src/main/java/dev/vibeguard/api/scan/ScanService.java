@@ -59,6 +59,11 @@ public class ScanService {
     }
 
     @Transactional(readOnly = true)
+    public java.util.List<Scan> listByUser(User user) {
+        return scanRepository.findTop50ByUser(user.getId());
+    }
+
+    @Transactional(readOnly = true)
     public Scan get(UUID scanId) {
         return scanRepository.findById(scanId)
             .orElseThrow(() -> new NotFoundException("스캔을 찾을 수 없습니다: " + scanId));
