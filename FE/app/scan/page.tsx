@@ -59,6 +59,7 @@ function ScanContent() {
   const [finalStatus, setFinalStatus] = useState("");
   const [error, setError] = useState("");
   const esRef = useRef<EventSource | null>(null);
+  const activityListRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!repoId) { setError("저장소 정보가 없습니다."); return; }
@@ -117,6 +118,17 @@ function ScanContent() {
 
   const stageIndex = STAGE_ORDER.indexOf(currentStage);
   const progress = done ? 100 : Math.min(95, Math.round(((stageIndex + 1) / STAGE_ORDER.length) * 100));
+
+  useEffect(() => {
+    const list = activityListRef.current;
+    if (!list) return;
+
+    const frame = requestAnimationFrame(() => {
+      list.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [logs.length]);
 
   if (error) {
     return (
@@ -177,8 +189,8 @@ function ScanContent() {
 
             <section className="activity-card">
               <div className="activity-heading"><h2>실시간 활동</h2><span>{done ? "DONE" : "LIVE"}</span></div>
-              <div className="activity-list">
-                {logs.slice(-7).map((log, i) => (
+              <div ref={activityListRef} className="activity-list" role="log" aria-label="실시간 활동 로그" aria-live="polite" tabIndex={0}>
+                {logs.map((log, i) => (
                   <div className={`activity-row ${log.level === "ERROR" ? "danger" : log.level === "WARN" ? "warning" : ""}`} key={i}>
                     <time>{new Date(log.ts).toLocaleTimeString("ko-KR")}</time>
                     <b>A{log.agent}</b>

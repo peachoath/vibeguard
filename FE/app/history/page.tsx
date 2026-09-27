@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AppHeader from "../components/app-header";
@@ -131,10 +132,10 @@ export default function HistoryPage() {
         </section>
 
         <section className="history-summary" aria-label="검사 이력 요약">
-          <article className="complete"><span>완료</span><strong>{summary.complete}</strong><small>검증 완료</small></article>
-          <article className="clean"><span>발견 없음</span><strong>{summary.clean}</strong><small>안전한 스캔</small></article>
-          <article className="failed"><span>패치 실패</span><strong>{summary.failed}</strong><small>수정 후보 없음</small></article>
-          <article className="blocked"><span>회귀 차단</span><strong>{summary.blocked}</strong><small>PR 생성 차단</small></article>
+          <article className="complete"><span>완료</span><strong>{summary.complete}</strong><small>검증 완료</small><Image src="/history_1.png" alt="" width={440} height={440} unoptimized /></article>
+          <article className="clean"><span>발견 없음</span><strong>{summary.clean}</strong><small>안전한 스캔</small><Image src="/history_2.png" alt="" width={440} height={440} unoptimized /></article>
+          <article className="failed"><span>패치 실패</span><strong>{summary.failed}</strong><small>수정 후보 없음</small><Image src="/history_3.png" alt="" width={440} height={440} unoptimized /></article>
+          <article className="blocked"><span>회귀 차단</span><strong>{summary.blocked}</strong><small>PR 생성 차단</small><Image src="/history_4.png" alt="" width={440} height={440} unoptimized /></article>
           <Link className="history-dashboard-link" href="/dashboard" scroll={false}>보안 현황</Link>
         </section>
 

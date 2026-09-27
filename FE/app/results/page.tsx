@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown, Search } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -144,10 +145,10 @@ function ResultsContent() {
 
           <div className="results-main">
             <section className="risk-summary" aria-label="위험도 요약">
-              <article className="critical"><span>치명적</span><strong>{counts.CRITICAL}</strong><small>즉시 수정 권장</small></article>
-              <article className="high"><span>높음</span><strong>{counts.HIGH}</strong><small>확인 필요</small></article>
-              <article className="moderate"><span>보통</span><strong>{counts.MEDIUM}</strong><small>낮은 위험</small></article>
-              <article className="excluded"><span>낮음</span><strong>{counts.LOW}</strong><small>모니터링</small></article>
+              <article className="critical"><span>치명적</span><strong>{counts.CRITICAL}</strong><small>즉시 수정 권장</small><Image className="risk-summary-icon" src="/finding_1.png" alt="치명적 위험" width={396} height={396} unoptimized /></article>
+              <article className="high"><span>높음</span><strong>{counts.HIGH}</strong><small>확인 필요</small><Image className="risk-summary-icon" src="/finding_2.png" alt="높은 위험" width={396} height={396} unoptimized /></article>
+              <article className="moderate"><span>보통</span><strong>{counts.MEDIUM}</strong><small>낮은 위험</small><Image className="risk-summary-icon" src="/finding_3.png" alt="보통 위험" width={396} height={396} unoptimized /></article>
+              <article className="excluded"><span>제외됨</span><strong>{counts.LOW}</strong><small>오탐 제거</small><Image className="risk-summary-icon" src="/finding_4.png" alt="제외된 항목" width={396} height={396} unoptimized /></article>
             </section>
 
             <section className="findings-card">
