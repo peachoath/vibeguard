@@ -2,7 +2,9 @@
 
 import { ArrowUp, ChevronDown, ListFilter, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Sk } from "../components/skeleton";
+import { ErrorView } from "../components/error-view";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
 import { apiFetch } from "@/lib/api";
@@ -58,11 +60,15 @@ export default function DashboardPage() {
   const [recentScans, setRecentScans] = useState<ScanDto[]>([]);
   const [repoMap, setRepoMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [range, setRange] = useState("30");
   const [filtersVisible, setFiltersVisible] = useState(false);
   const [rateMenuOpen, setRateMenuOpen] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
+  function load() {
+    setLoading(true);
+    setError(false);
     Promise.all([
       apiFetch<SummaryDto>("/api/v1/dashboard/summary"),
       apiFetch<ScanDto[]>("/api/v1/scans"),
@@ -73,9 +79,29 @@ export default function DashboardPage() {
         setRecentScans(scans.slice(0, 5));
         setRepoMap(Object.fromEntries(repos.map((r) => [r.id, r.fullName])));
       })
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  /* Poll every 5 s while any scan is live */
+  useEffect(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    const hasLive = recentScans.some((s) => s.status === "QUEUED" || s.status === "RUNNING");
+    if (!hasLive) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const [scans, repos] = await Promise.all([
+          apiFetch<ScanDto[]>("/api/v1/scans"),
+          apiFetch<Repository[]>("/api/v1/repositories"),
+        ]);
+        setRecentScans(scans.slice(0, 5));
+        setRepoMap(Object.fromEntries(repos.map((r) => [r.id, r.fullName])));
+      } catch {}
+    }, 5000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [recentScans]);
 
   const dist = summary?.severityDistribution ?? {};
   const totalFindings = Object.values(dist).reduce((a, b) => a + b, 0);
@@ -117,8 +143,41 @@ export default function DashboardPage() {
           </div>
         </section>
 
+        {error && !loading && <ErrorView onRetry={load} />}
+
         {loading ? (
-          <p className="history-empty">불러오는 중…</p>
+          <div aria-hidden="true">
+            <section className="security-kpis">
+              {Array.from({ length: 4 }, (_, i) => (
+                <article key={i} style={{ padding: "15px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <Sk w={80} h={12} r={4} />
+                  <Sk w={55} h={30} r={6} />
+                  <Sk w={110} h={11} r={4} />
+                </article>
+              ))}
+            </section>
+            <div className="security-chart-row" style={{ marginTop: 20 }}>
+              <section className="patch-trend-card"><Sk h={180} r={10} /></section>
+              <section className="regression-rate-card"><Sk h={180} r={10} /></section>
+            </div>
+            <div className="security-bottom-row" style={{ marginTop: 18 }}>
+              <section className="recent-scans-card">
+                <div className="security-card-heading" style={{ marginBottom: 12 }}>
+                  <div><Sk w={80} h={16} /><Sk w={140} h={11} r={4} style={{ marginTop: 4 }} /></div>
+                </div>
+                {Array.from({ length: 4 }, (_, i) => (
+                  <div key={i} className="recent-scan-row">
+                    <Sk w="55%" h={13} />
+                    <Sk w="40%" h={13} />
+                    <Sk w={64} h={22} r={8} />
+                    <Sk w="35%" h={13} />
+                  </div>
+                ))}
+              </section>
+              <section className="severity-card"><Sk h={160} r={10} /></section>
+              <section className="processing-card"><Sk h={80} r={10} /></section>
+            </div>
+          </div>
         ) : (
           <>
             <section className="security-kpis" aria-label="보안 현황 요약">
@@ -183,7 +242,16 @@ export default function DashboardPage() {
                       <span>{scan.startedAt ? new Date(scan.startedAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-"}</span>
                     </div>
                   ))}
-                  {recentScans.length === 0 && <p className="history-empty">검사 기록이 없습니다.</p>}
+                  {recentScans.length === 0 && (
+                    <div className="empty-state empty-state-sm">
+                      <svg className="empty-state-icon" width="36" height="36" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <h3>스캔 기록이 없습니다</h3>
+                      <p>저장소를 연결하고 첫 스캔을 실행해보세요.</p>
+                      <Link className="empty-cta" href="/repositories">저장소 관리</Link>
+                    </div>
+                  )}
                 </div>
               </section>
 

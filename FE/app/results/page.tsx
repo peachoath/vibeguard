@@ -2,6 +2,8 @@
 
 import { ChevronDown, Search } from "lucide-react";
 import Image from "next/image";
+import { Sk } from "../components/skeleton";
+import { ErrorView } from "../components/error-view";
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -52,6 +54,7 @@ function ResultsContent() {
 
   const [data, setData] = useState<PageResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [severity, setSeverity] = useState("all");
   const [verdict, setVerdict] = useState("all");
   const [query, setQuery] = useState("");
@@ -61,7 +64,7 @@ function ResultsContent() {
     if (!scanId) { setLoading(false); return; }
     apiFetch<PageResponse>(`/api/v1/scans/${scanId}/findings?size=100`)
       .then(setData)
-      .catch(() => setData(null))
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, [scanId]);
 
@@ -170,7 +173,7 @@ function ResultsContent() {
                 </div>
               </div>
 
-              {loading && <p className="findings-empty">불러오는 중…</p>}
+              {error && !loading && <ErrorView onRetry={() => { setError(false); setLoading(true); if (scanId) apiFetch<PageResponse>(`/api/v1/scans/${scanId}/findings?size=100`).then(setData).catch(() => setError(true)).finally(() => setLoading(false)); }} />}
               {!scanId && !loading && <p className="findings-empty">스캔을 먼저 선택하세요. <Link href="/history">검사 이력 보기</Link></p>}
 
               <div className="findings-table-wrap">
@@ -187,7 +190,18 @@ function ResultsContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {visible.map((item) => (
+                    {loading && Array.from({ length: 5 }, (_, i) => (
+                      <tr key={i} aria-hidden="true">
+                        <td><Sk w="80%" h={13} /></td>
+                        <td><Sk w="75%" h={13} /></td>
+                        <td><Sk w="85%" h={13} /></td>
+                        <td><Sk w={56} h={22} r={8} /></td>
+                        <td><Sk w={52} h={22} r={8} /></td>
+                        <td><Sk w={64} h={22} r={8} /></td>
+                        <td><Sk w={56} h={13} /></td>
+                      </tr>
+                    ))}
+                    {!loading && visible.map((item) => (
                       <tr key={item.id}>
                         <td><strong>{item.packageName ?? item.filePath ?? "-"}</strong></td>
                         <td>{item.cveId ?? item.ruleId ?? "-"}{item.cvssScore ? ` · ${item.cvssScore}` : ""}</td>
@@ -212,7 +226,13 @@ function ResultsContent() {
                   <p className="findings-empty">조건에 맞는 Finding이 없습니다.</p>
                 )}
                 {!loading && findings.length === 0 && scanId && (
-                  <p className="findings-empty">이 스캔에서 Finding이 없습니다.</p>
+                  <div className="empty-state">
+                    <svg className="empty-state-icon" width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.955 11.955 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                    </svg>
+                    <h3>취약점이 발견되지 않았습니다</h3>
+                    <p>이 스캔에서 모든 의존성이 안전합니다.</p>
+                  </div>
                 )}
               </div>
             </section>

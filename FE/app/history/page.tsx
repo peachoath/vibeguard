@@ -4,6 +4,8 @@ import { ChevronDown } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { Sk } from "../components/skeleton";
+import { ErrorView } from "../components/error-view";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
 import { apiFetch } from "@/lib/api";
@@ -52,6 +54,7 @@ export default function HistoryPage() {
   const [scans, setScans] = useState<ScanDto[]>([]);
   const [repoMap, setRepoMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [range, setRange] = useState("30");
   const [status, setStatus] = useState("all");
   const [auditOpen, setAuditOpen] = useState(false);
@@ -65,7 +68,7 @@ export default function HistoryPage() {
         setScans(scanList);
         setRepoMap(Object.fromEntries(repos.map((r) => [r.id, r.fullName])));
       })
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
 
@@ -146,10 +149,22 @@ export default function HistoryPage() {
           </div>
           {auditOpen && <p className="audit-message" role="status">모든 검사 상태 변경과 PR 생성 기록이 보존되고 있습니다.</p>}
 
-          {loading && <p className="history-empty">불러오는 중…</p>}
+          {error && !loading && <ErrorView onRetry={() => { setError(false); window.location.reload(); }} />}
 
           <div className="history-timeline" tabIndex={0} aria-label="스캔 이력 목록">
-            {visible.map((scan) => (
+            {loading && Array.from({ length: 4 }, (_, i) => (
+              <article key={i} className="sk-history-row" aria-hidden="true">
+                <div className="history-repository">
+                  <Sk w={100} h={10} r={4} />
+                  <Sk w={180} h={13} r={4} style={{ marginTop: 6 }} />
+                </div>
+                <Sk w={80} h={28} r={14} />
+                <Sk w={90} h={12} r={4} />
+                <Sk w={44} h={12} r={4} />
+                <Sk w={70} h={28} r={14} />
+              </article>
+            ))}
+            {!loading && visible.map((scan) => (
               <article className={`history-row ${statusTone(scan.status)}`} key={scan.id}>
                 <span className="timeline-dot" aria-hidden="true" />
                 <div className="history-repository">
@@ -163,7 +178,18 @@ export default function HistoryPage() {
               </article>
             ))}
             {!loading && visible.length === 0 && (
-              <p className="history-empty">선택한 조건의 검사 이력이 없습니다.</p>
+              scans.length === 0 ? (
+                <div className="empty-state" style={{ alignSelf: "center" }}>
+                  <svg className="empty-state-icon" width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <h3>스캔 기록이 없습니다</h3>
+                  <p>저장소를 연결하고 스캔을 실행하면 이력이 쌓입니다.</p>
+                  <Link className="empty-cta" href="/repositories">저장소 관리</Link>
+                </div>
+              ) : (
+                <p className="history-empty" style={{ alignSelf: "center" }}>선택한 조건의 검사 이력이 없습니다.</p>
+              )
             )}
           </div>
         </section>
