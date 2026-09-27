@@ -1,0 +1,16 @@
+# 빌드 컨텍스트에서 제외 (이미지 크기·빌드 속도)
+build/
+.gradle/
+*.log
+
+# 로컬 설정·시크릿 (컨테이너에 들어가면 안 됨)
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# 문서·git (컨텍스트 불필요)
+.git/

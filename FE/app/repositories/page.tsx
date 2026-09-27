@@ -2,6 +2,9 @@
 
 import { ChevronDown, ChevronsUpDown, Lock, Plus, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Sk } from "../components/skeleton";
+import { ErrorView } from "../components/error-view";
+import { toast } from "../components/providers";
 import Link from "next/link";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
@@ -26,6 +29,7 @@ interface GitHubRepo {
 export default function RepositoriesPage() {
   const [repos, setRepos] = useState<Repository[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [query, setQuery] = useState("");
   const [sortOrder, setSortOrder] = useState("default");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -41,7 +45,7 @@ export default function RepositoriesPage() {
   useEffect(() => {
     apiFetch<Repository[]>("/api/v1/repositories")
       .then(setRepos)
-      .catch(() => setRepos([]))
+      .catch(() => { setError(true); setRepos([]); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -82,8 +86,9 @@ export default function RepositoriesPage() {
       });
       setRepos((prev) => [added, ...prev]);
       closeAdd();
+      toast.success(`${repo.fullName} 저장소가 연결되었습니다.`);
     } catch {
-      // already connected etc.
+      toast.error(`${repo.fullName} 연결에 실패했습니다.`);
     } finally {
       setConnecting(null);
     }
@@ -221,11 +226,21 @@ export default function RepositoriesPage() {
                 </div>
               </div>
 
+              {error && !loading && <ErrorView onRetry={() => { setError(false); setLoading(true); apiFetch<Repository[]>("/api/v1/repositories").then(setRepos).catch(() => setError(true)).finally(() => setLoading(false)); }} />}
+
               <div className="repository-table" role="table">
                 <div className="repository-row repository-table-head" role="row">
                   <span>저장소</span><span>기본 브랜치</span><span>언어</span><span>연결일</span>
                 </div>
-                {loading && <p className="repository-empty">불러오는 중…</p>}
+                {loading && Array.from({ length: 4 }, (_, i) => (
+                  <div key={i} className="sk-repo-row" aria-hidden="true">
+                    <Sk w="72%" h={13} />
+                    <Sk w="58%" h={13} />
+                    <Sk w="46%" h={13} />
+                    <Sk w="52%" h={13} />
+                    <span />
+                  </div>
+                ))}
                 {!loading && visible.map((r) => (
                   <button
                     className={`repository-row${selectedId === r.id ? " selected" : ""}`}
@@ -238,7 +253,19 @@ export default function RepositoriesPage() {
                     <span>{new Date(r.connectedAt).toLocaleDateString("ko-KR")}</span>
                   </button>
                 ))}
-                {!loading && visible.length === 0 && <p className="repository-empty">저장소가 없습니다. 저장소를 추가해주세요.</p>}
+                {!loading && repos.length === 0 && (
+                  <div className="empty-state">
+                    <svg className="empty-state-icon" width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                    </svg>
+                    <h3>연결된 저장소가 없습니다</h3>
+                    <p>GitHub 저장소를 연결하면 보안 파이프라인을 바로 시작할 수 있습니다.</p>
+                    <button className="empty-cta" onClick={openAdd}>저장소 연결하기</button>
+                  </div>
+                )}
+                {!loading && repos.length > 0 && visible.length === 0 && (
+                  <p className="repository-empty">&quot;{query}&quot;와 일치하는 저장소가 없습니다.</p>
+                )}
               </div>
             </section>
           </div>

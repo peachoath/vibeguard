@@ -7,6 +7,9 @@ import { useRouter } from "next/navigation";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
 import { apiFetch } from "@/lib/api";
+import { Sk } from "../components/skeleton";
+import { ErrorView } from "../components/error-view";
+import { toast } from "../components/providers";
 
 interface UserProfile {
   githubId: number;
@@ -47,6 +50,7 @@ export default function SettingsPage() {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   // Profile edit
   const [displayName, setDisplayName] = useState("");
@@ -80,7 +84,7 @@ export default function SettingsPage() {
         setMinSeverity(cfg.minSeverity);
         setNotifyEmail(cfg.notifyEmail);
       })
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
 
@@ -94,6 +98,9 @@ export default function SettingsPage() {
       setProfile(updated);
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 2000);
+      toast.success("프로필이 저장되었습니다.");
+    } catch {
+      toast.error("프로필 저장에 실패했습니다.");
     } finally {
       setProfileSaving(false);
     }
@@ -105,6 +112,9 @@ export default function SettingsPage() {
       const updated = await apiFetch<UserProfile>("/api/v1/users/me/resync", { method: "POST" });
       setProfile(updated);
       setDisplayName(updated.displayName);
+      toast.success("GitHub 정보가 동기화되었습니다.");
+    } catch {
+      toast.error("동기화에 실패했습니다.");
     } finally {
       setResyncing(false);
     }
@@ -120,6 +130,9 @@ export default function SettingsPage() {
       setSettings(updated);
       setSettingsSaved(true);
       setTimeout(() => setSettingsSaved(false), 2000);
+      toast.success("설정이 저장되었습니다.");
+    } catch {
+      toast.error("설정 저장에 실패했습니다.");
     } finally {
       setSettingsSaving(false);
     }
@@ -130,6 +143,8 @@ export default function SettingsPage() {
     try {
       await apiFetch<void>("/api/v1/users/me", { method: "DELETE" });
       router.replace("/login");
+    } catch {
+      toast.error("계정 삭제에 실패했습니다. 다시 시도해주세요.");
     } finally {
       setDeleting(false);
     }
@@ -167,7 +182,26 @@ export default function SettingsPage() {
           </aside>
 
           <div className="settings-main">
-            {loading && <p className="settings-loading">불러오는 중…</p>}
+            {error && !loading && <ErrorView onRetry={() => { setError(false); window.location.reload(); }} />}
+
+            {loading && (
+              <>
+                <div className="settings-sk-card">
+                  <Sk w={120} h={18} r={4} />
+                  <Sk w={220} h={12} r={4} />
+                  {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className="settings-sk-field">
+                      <Sk w="80%" h={13} r={4} />
+                      <Sk w="100%" h={38} r={10} />
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                    <Sk w={80} h={38} r={10} />
+                    <Sk w={130} h={38} r={10} />
+                  </div>
+                </div>
+              </>
+            )}
 
             {!loading && tab === "profile" && (
               <section className="settings-card">
