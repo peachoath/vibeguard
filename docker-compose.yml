@@ -1,6 +1,10 @@
 # VibeGuard — 로컬 개발용 인프라 (PRD §12: 데모는 단일 VM + Docker Compose)
-# 현재는 PostgreSQL만 기동합니다. api-server / agent-runner 서비스는
-# 각 Dockerfile 작성 후 (W1 후반) 주석을 해제해 통합합니다.
+#
+# ⚠️ DB는 기본적으로 Supabase 관리형 PostgreSQL 16을 사용합니다(.env의 DB_* 참고).
+#    아래 postgres 서비스는 "오프라인 로컬 개발 폴백"용입니다 — 쓰려면 .env의
+#    로컬 DB_URL 주석을 활성화하세요. 공유 개발/운영은 Supabase로 붙습니다.
+#
+# api-server / agent-runner 서비스는 각 Dockerfile 작성 후(W1 후반) 주석 해제해 통합합니다.
 
 services:
   postgres:

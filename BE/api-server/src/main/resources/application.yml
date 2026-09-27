@@ -2,6 +2,11 @@ spring:
   application:
     name: vibeguard-api
 
+  # DB: Supabase 관리형 PostgreSQL 16 (PRD §12).
+  # 운영/공유 개발은 Supavisor 세션 풀러(포트 5432) + sslmode=require 로 접속.
+  #   DB_URL  예) jdbc:postgresql://aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+  #   DB_USER 예) postgres.<project-ref>
+  # 아래 기본값은 로컬 docker-compose 폴백용입니다(오프라인 개발 시에만).
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/vibeguard}
     username: ${DB_USER:vibeguard}
@@ -27,10 +32,24 @@ spring:
           github:
             client-id: ${GITHUB_CLIENT_ID:changeme}
             client-secret: ${GITHUB_CLIENT_SECRET:changeme}
-            scope: read:user,repo
+            # 로그인에 필요한 최소 스코프. 리포 스캔(F-02)이 붙을 때 repo 추가 예정.
+            scope: read:user,user:email
 
-# Agent Runner callback (HMAC-signed) — see PRD NFR-S4
 vibeguard:
+  app:
+    # 로그인 성공 후 리다이렉트 URL. 기본값 "/" (prod: FE·BE 동일 오리진).
+    # dev는 FE dev 서버가 별도 포트라 .env의 POST_LOGIN_URI로 절대 URL 지정
+    #   예) POST_LOGIN_URI=http://localhost:5173/dashboard
+    post-login-uri: ${POST_LOGIN_URI:/}
+  # GitHub access token 암호화 키 (AES-256-GCM, NFR-S3). base64 인코딩된 32바이트.
+  # 운영에서는 반드시 TOKEN_ENC_KEY 환경변수로 교체하세요.
+  security:
+    token-key: ${TOKEN_ENC_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
+  # CORS 허용 오리진 (FE는 Vercel 분리 배포 — 크로스 오리진). 쉼표 구분.
+  # 개발에선 Vite 프록시라 CORS 불필요하나, 배포 오리진을 화이트리스트로 관리.
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  # Agent Runner callback (HMAC-signed) — see PRD NFR-S4
   runner:
     base-url: ${RUNNER_BASE_URL:http://localhost:4000}
     callback-secret: ${RUNNER_CALLBACK_SECRET:dev-secret-change-me}

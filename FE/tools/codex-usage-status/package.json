@@ -1,0 +1,42 @@
+{
+  "name": "codex-usage-status",
+  "displayName": "Codex Usage Status",
+  "description": "Show Codex rate-limit usage in the VS Code status bar.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codexUsage.refresh",
+        "title": "Codex Usage: Refresh"
+      }
+    ],
+    "configuration": {
+      "title": "Codex Usage Status",
+      "properties": {
+        "codexUsage.refreshIntervalSeconds": {
+          "type": "number",
+          "default": 60,
+          "minimum": 15,
+          "description": "How often to refresh Codex usage in the status bar."
+        },
+        "codexUsage.codexPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional absolute path to the Codex CLI executable."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "check": "node --check extension.js && node --check codex-client.js",
+    "package": "vsce package --allow-missing-repository"
+  },
+  "license": "MIT"
+}

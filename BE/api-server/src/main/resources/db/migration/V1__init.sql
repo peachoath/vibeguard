@@ -3,8 +3,9 @@
 --                              │                      │
 --                              └──< agent_runs        └──< pull_requests
 --                                        └──< audit_logs
-
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+--
+-- gen_random_uuid()는 PostgreSQL 13+ 코어 내장 함수라 별도 확장(pgcrypto) 불필요.
+-- (Supabase 관리형 환경에서 풀러 접속 롤의 확장 생성 권한 이슈 회피)
 
 CREATE TABLE users (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),

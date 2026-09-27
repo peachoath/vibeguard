@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>VibeGuard 로그인</title>
+</head>
+<body>
+  <h1>🛡️ VibeGuard</h1>
+  <p id="status">로그인 상태 확인 중...</p>
+
+  <a id="login" href="/oauth2/authorization/github">GitHub으로 로그인</a>
+
+  <form id="logout" method="post" action="/api/v1/auth/logout" hidden>
+    <button type="submit">로그아웃</button>
+  </form>
+
+  <script>
+    fetch('/api/v1/auth/me', { credentials: 'same-origin' })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (user) {
+        var status = document.getElementById('status');
+        if (user) {
+          status.textContent = '로그인됨: ' + user.login + ' (githubId=' + user.githubId + ')';
+          document.getElementById('login').hidden = true;
+          document.getElementById('logout').hidden = false;
+        } else {
+          status.textContent = '로그인되지 않음';
+        }
+      })
+      .catch(function () {
+        document.getElementById('status').textContent = '상태 확인 실패';
+      });
+  </script>
+</body>
+</html>
