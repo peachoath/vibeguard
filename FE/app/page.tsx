@@ -1,9 +1,10 @@
 import Image from "next/image";
-import Link from "next/link";
+import LoginModalTrigger, { LoginModalProvider } from "./components/login-modal-trigger";
 import ScreenContent from "./components/screen-content";
 
 export default function Home() {
   return (
+    <LoginModalProvider>
     <main className="landing-page">
       <Image className="landing-background" src="/landing_back.png?v=2" alt="" width={3844} height={3420} unoptimized priority />
 
@@ -15,7 +16,7 @@ export default function Home() {
           <a href="#product">제품</a>
           <a href="#security">보안 원리</a>
           <a href="#docs">문서</a>
-          <a className="header-cta" href="#github">GitHub로 시작하기</a>
+          <LoginModalTrigger />
         </nav>
       </header>
 
@@ -25,7 +26,7 @@ export default function Home() {
           <h1>취약점은 줄이고<br />기능은 그대로</h1>
           <p>공식 DB 검증부터 안전 버전 결정, 회귀 테스트, PR 생성까지 자동으로 이어집니다.</p>
           <div className="hero-actions">
-            <Link className="button button-primary" href="/repositories" scroll={false}>GitHub 저장소 연결</Link>
+            <LoginModalTrigger variant="primary" label="점검하기" />
             <a className="button button-secondary" href="#product">작동 방식 보기</a>
           </div>
         </div>
@@ -74,5 +75,6 @@ export default function Home() {
       <span id="github" className="anchor-target" />
       <span id="pr-example" className="anchor-target" />
     </main>
+    </LoginModalProvider>
   );
 }
