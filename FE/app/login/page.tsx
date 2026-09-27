@@ -1,9 +1,10 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "../components/auth-provider";
-import { useRouter } from "next/navigation";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
@@ -17,17 +18,16 @@ export default function LoginPage() {
 
   return (
     <main className="login-page">
-      <div className="login-card">
-        <Image src="/vibeguard_logo_1.png" alt="VibeGuard" width={226} height={85} priority />
-        <h1>취약점은 줄이고<br />기능은 그대로</h1>
-        <p>GitHub 저장소를 연결하면 취약점 탐지부터 패치 PR 생성까지 자동으로 이어집니다.</p>
-        <a
-          className="button button-primary login-github-button"
-          href={`${API_BASE}/oauth2/authorization/github`}
-        >
-          GitHub으로 시작하기
-        </a>
-      </div>
+      <section className="login-page-content" aria-labelledby="login-page-title">
+        <Link className="login-page-brand" href="/" aria-label="Vibe Guard 홈">
+          <Image src="/vibeguard_logo_1.png" alt="Vibe Guard" width={452} height={170} priority />
+        </Link>
+        <span className="login-page-github" aria-hidden="true"><Image src="/github-mark.png" alt="" width={560} height={560} /></span>
+        <h1 id="login-page-title">GitHub 계정 연결</h1>
+        <p>Vibe Guard가 저장소를 점검하고 보안 패치 PR을 만들 수 있도록 GitHub 로그인을 진행합니다.</p>
+        <a className="login-page-oauth" href={`${API_BASE}/oauth2/authorization/github`}>GitHub로 로그인</a>
+        <Link className="login-page-back" href="/">홈으로 돌아가기</Link>
+      </section>
     </main>
   );
 }
