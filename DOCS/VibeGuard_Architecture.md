@@ -17,7 +17,7 @@ VibeGuard는 GitHub 리포의 **취약 라이브러리를 탐지 → 위험도 �
 
 | 티어 | 런타임 | 역할 |
 |---|---|---|
-| **Web (FE)** | React 19 + TS + Vite | 대시보드, 실시간 진행 시각화, 증거·Diff 열람 |
+| **Web (FE)** | Next.js 15 App Router + React 19 + TS | 대시보드, 실시간 진행 시각화, 증거·Diff 열람 |
 | **API Server (BE)** | Spring Boot 4 / Java 21 | REST + SSE, OAuth, 스캔 오케스트레이션(상태머신), DB |
 | **Agent (BE)** | Node 22 + TS | Claude Agent SDK 런너 + 자체 MCP 서버 3종 |
 
@@ -59,8 +59,8 @@ graph TB
 
 ```mermaid
 graph TB
-    subgraph Client["Web Client (React 19 / Vite)"]
-        FE["TanStack Query · Zustand<br/>SSE 훅 · Diff/Shiki · Recharts"]
+    subgraph Client["Web Client (Next.js 15 App Router / React 19)"]
+        FE["React Query (TanStack)<br/>SSE addEventListener · Diff/Shiki"]
     end
 
     subgraph ApiTier["API Server (Spring Boot 4 / Java 21)"]
@@ -101,13 +101,13 @@ graph TB
     TEST --> C2 & C3
 ```
 
-> 공통 격리(비특권 사용자·`--read-only`·`--cap-drop=ALL`·메모리/PID 상한·300s)는 3종 모두 유지. **남의 테스트 코드가 도는 ③ 테스트 컨테이너에만 네트워크가 없다.** Trivy DB·pip 캐시는 호스트에서 마운트(속도 목적).
+> 공통 격리(비특권 사용자·`--read-only`·`--cap-drop=ALL`·메모리/PID 상한·300s)는 3종 모두 유지. **남의 테스트 코드가 도는 ③ 테스트 컨테이너에만 네트워크가 없다.** Trivy DB·pip 캐시는 호스트에서 `:ro` 마운트(속도 목적).
 
 **포트 (개발 기준)**
 
 | 컴포넌트 | 포트 | 비고 |
 |---|---|---|
-| FE (Vite) | 5173 | `/api` → :8080 프록시 |
+| FE (Next.js) | 3000 | `/api` → :8080 프록시 |
 | API Server | 8080 | Swagger UI `/swagger-ui.html` |
 | Agent Runner | 4000 | `/health`, `/scans` |
 | PostgreSQL | 5432 | Supabase 세션 풀러 / 로컬 폴백 |
@@ -361,10 +361,9 @@ flowchart TB
 mindmap
   root((VibeGuard))
     FE
+      Next.js 15 App Router
       React 19 + TS
-      Vite
-      TanStack Query v5
-      Zustand
+      React Query (TanStack) v5
       Tailwind + shadcn/ui
       Vitest + MSW
     API Server

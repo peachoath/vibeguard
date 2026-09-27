@@ -48,6 +48,8 @@ public class SecurityConfig {
                     "/api/v1/auth/me",
                     // 런너 콜백은 세션이 아니라 HMAC-SHA256 서명으로만 보호 (NFR-S4)
                     "/api/v1/internal/runner/**",
+                    // 개발 전용 엔드포인트 — dev/test/default 프로파일에서만 활성
+                    "/api/v1/internal/dev/**",
                     "/actuator/health",
                     "/swagger-ui/**", "/v3/api-docs/**")
                 .permitAll()

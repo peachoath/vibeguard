@@ -1,247 +1,181 @@
-'use client'
+"use client";
 
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { ChevronDown, ChevronsUpDown, Search, X } from 'lucide-react'
-import Image from 'next/image'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useState } from 'react'
-import AuthGuard from '../components/auth-guard'
-import AppHeader from '../components/app-header'
-import ScreenContent from '../components/screen-content'
-import { apiFetch } from '@/lib/api'
-import { toast } from '../components/providers'
+import { ChevronDown, ChevronsUpDown, Plus, Search, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import AppHeader from "../components/app-header";
+import ScreenContent from "../components/screen-content";
+import { apiFetch } from "@/lib/api";
 
 interface Repository {
-  id: string
-  name: string
-  fullName: string
-  branch: string
-  language: string
-  lastScannedAt: string | null
-  findingCount: number
-  status: string
+  id: string;
+  fullName: string;
+  defaultBranch: string;
+  language: string | null;
+  connectedAt: string;
 }
 
-const STATUS_META: Record<string, { label: string; tone: string }> = {
-  PROTECTED: { label: '보호 중', tone: 'safe' },
-  SAFE: { label: '안전', tone: 'safe' },
-  NEEDS_ACTION: { label: '조치 필요', tone: 'warning' },
-  REVIEW_REQUIRED: { label: '검토 필요', tone: 'danger' },
+interface GitHubRepo {
+  id: number;
+  fullName: string;
+  defaultBranch: string;
+  language: string | null;
+  private: boolean;
 }
-
-function fmtRelative(iso: string | null) {
-  if (!iso) return '—'
-  const diff = Date.now() - new Date(iso).getTime()
-  const mins = Math.floor(diff / 60_000)
-  if (mins < 1) return '방금 전'
-  if (mins < 60) return `${mins}분 전`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}시간 전`
-  const days = Math.floor(hrs / 24)
-  return days === 1 ? '어제' : `${days}일 전`
-}
-
-const statsConfig = [
-  { label: '연결됨', icon: '/chain.png', tone: 'blue', detail: '지난 30일' },
-  { label: '보호 브랜치', icon: '/g_guard.png', tone: 'green', detail: 'main / develop' },
-  { label: '자동 검사', icon: '/check.png', tone: 'amber', detail: 'PR 이벤트에서 실행' },
-  { label: '마지막 동기화', icon: '/synchro.png', tone: 'purple', detail: 'GitHub 연결 정상' },
-]
 
 export default function RepositoriesPage() {
-  const [query, setQuery] = useState('')
-  const [sortOrder, setSortOrder] = useState('default')
-  const [selectedRepo, setSelectedRepo] = useState<Repository | null>(null)
-  const [selectedBranch, setSelectedBranch] = useState('main')
-  const router = useRouter()
+  const [repos, setRepos] = useState<Repository[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [sortOrder, setSortOrder] = useState("default");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [scanBranch, setScanBranch] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [githubRepos, setGithubRepos] = useState<GitHubRepo[]>([]);
+  const [addLoading, setAddLoading] = useState(false);
 
-  const { data: repositories = [], isLoading } = useQuery({
-    queryKey: ['repositories'],
-    queryFn: () => apiFetch<Repository[]>('/repositories'),
-  })
+  useEffect(() => {
+    apiFetch<Repository[]>("/api/v1/repositories")
+      .then(setRepos)
+      .catch(() => setRepos([]))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const startScan = useMutation({
-    mutationFn: (vars: { repositoryId: string; branch: string }) =>
-      apiFetch<{ id: string }>('/scans', {
-        method: 'POST',
-        body: JSON.stringify(vars),
-      }),
-    onSuccess: (scan) => {
-      toast.success('스캔이 시작되었습니다.')
-      router.push(`/scan?id=${scan.id}`)
-    },
-    onError: () => toast.error('스캔 시작에 실패했습니다.'),
-  })
+  const selected = repos.find((r) => r.id === selectedId) ?? repos[0] ?? null;
 
-  const visibleRepositories = repositories
-    .filter((r) => r.name.toLowerCase().includes(query.trim().toLowerCase()))
+  const visible = repos
+    .filter((r) => r.fullName.toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => {
-      if (sortOrder === 'name-asc') return a.name.localeCompare(b.name)
-      if (sortOrder === 'name-desc') return b.name.localeCompare(a.name)
-      if (sortOrder === 'findings') return b.findingCount - a.findingCount || a.name.localeCompare(b.name)
-      if (a.lastScannedAt && b.lastScannedAt) return new Date(b.lastScannedAt).getTime() - new Date(a.lastScannedAt).getTime()
-      return 0
-    })
+      if (sortOrder === "name-asc") return a.fullName.localeCompare(b.fullName);
+      if (sortOrder === "name-desc") return b.fullName.localeCompare(a.fullName);
+      return new Date(b.connectedAt).getTime() - new Date(a.connectedAt).getTime();
+    });
 
-  const displayRepo = selectedRepo ?? repositories[0]
+  function openAdd() {
+    setAddOpen(true);
+    setAddLoading(true);
+    apiFetch<GitHubRepo[]>("/api/v1/repositories?source=github")
+      .then(setGithubRepos)
+      .catch(() => setGithubRepos([]))
+      .finally(() => setAddLoading(false));
+  }
 
-  const stats = [
-    { ...statsConfig[0], value: String(repositories.length) },
-    { ...statsConfig[1], value: String(repositories.filter((r) => r.branch).length) },
-    { ...statsConfig[2], value: String(repositories.length) },
-    { ...statsConfig[3], value: displayRepo?.lastScannedAt ? fmtRelative(displayRepo.lastScannedAt) : '—' },
-  ]
+  async function connectRepo(repo: GitHubRepo) {
+    try {
+      const added = await apiFetch<Repository>("/api/v1/repositories", {
+        method: "POST",
+        body: JSON.stringify({ githubRepoId: repo.id, fullName: repo.fullName, defaultBranch: repo.defaultBranch, language: repo.language }),
+      });
+      setRepos((prev) => [added, ...prev]);
+      setAddOpen(false);
+    } catch {
+      // 이미 연결된 경우 등
+    }
+  }
 
   return (
-    <AuthGuard>
-      <main className="repositories-page">
-        <AppHeader active="repositories" />
+    <main className="repositories-page">
+      <AppHeader active="repositories" />
 
-        <ScreenContent>
-          <section className="repositories-heading" id="repositories">
-            <div>
-              <h1>저장소</h1>
-              <p>보안 검증을 적용할 GitHub 저장소를 연결하고 관리합니다.</p>
+      <ScreenContent>
+        <section className="repositories-heading" id="repositories">
+          <div><h1>저장소</h1><p>보안 검증을 적용할 GitHub 저장소를 연결하고 관리합니다.</p></div>
+          <div className="heading-buttons">
+            <button onClick={openAdd}><Plus size={15} /> 저장소 추가</button>
+          </div>
+        </section>
+
+        {addOpen && (
+          <div className="add-repo-modal">
+            <div className="add-repo-content">
+              <h2>GitHub 저장소 연결</h2>
+              {addLoading ? <p>불러오는 중…</p> : (
+                <div className="github-repo-list">
+                  {githubRepos.map((r) => (
+                    <button key={r.id} className="github-repo-row" onClick={() => connectRepo(r)}>
+                      <strong>{r.fullName}</strong>
+                      <span>{r.language ?? "Unknown"}</span>
+                    </button>
+                  ))}
+                  {githubRepos.length === 0 && <p>연결 가능한 저장소가 없습니다.</p>}
+                </div>
+              )}
+              <button onClick={() => setAddOpen(false)}>닫기</button>
             </div>
-            <div className="heading-buttons">
-              <button>검사 정책</button>
-              <button>전체 저장소</button>
-            </div>
-          </section>
+          </div>
+        )}
 
-          <div className="repository-layout">
-            <div className="repository-main">
-              <section className="stats-grid" aria-label="저장소 요약">
-                {stats.map((stat) => (
-                  <article className={`stat-card ${stat.tone}`} key={stat.label}>
-                    <div>
-                      <span>{stat.label}</span>
-                      <strong>{stat.value}</strong>
-                      <small>{stat.detail}</small>
-                    </div>
-                    <Image src={stat.icon} alt="" width={90} height={90} />
-                  </article>
-                ))}
-              </section>
-
-              <section className="repository-card">
-                <div className="repository-card-header">
-                  <div>
-                    <h2>저장소 목록</h2>
-                    <p>연결된 저장소와 최근 검사 상태</p>
-                  </div>
-                  <div className="repository-tools">
-                    <label htmlFor="repository-search">
-                      <Search size={17} />
-                      <input
-                        id="repository-search"
-                        aria-label="저장소 이름 검색"
-                        placeholder="검색"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Escape') setQuery('') }}
-                      />
-                      <button className="search-clear" type="button" aria-label="검색어 지우기" disabled={!query} onClick={() => setQuery('')}>
-                        <X size={14} />
-                      </button>
-                    </label>
-                    <div className="repository-sort">
-                      <select aria-label="저장소 정렬 기준" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
-                        <option value="default">정렬 기준</option>
-                        <option value="recent">최근 검사순</option>
-                        <option value="name-asc">이름 오름차순</option>
-                        <option value="name-desc">이름 내림차순</option>
-                        <option value="findings">발견 수 많은 순</option>
-                      </select>
-                      <ChevronsUpDown size={15} aria-hidden="true" />
-                    </div>
+        <div className="repository-layout">
+          <div className="repository-main">
+            <section className="repository-card">
+              <div className="repository-card-header">
+                <div><h2>저장소 목록</h2><p>연결된 저장소</p></div>
+                <div className="repository-tools">
+                  <label htmlFor="repository-search">
+                    <Search size={17} />
+                    <input id="repository-search" placeholder="검색" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") setQuery(""); }} />
+                    <button type="button" aria-label="지우기" disabled={!query} onClick={() => setQuery("")}><X size={14} /></button>
+                  </label>
+                  <div className="repository-sort">
+                    <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
+                      <option value="default">최근 연결순</option>
+                      <option value="name-asc">이름 오름차순</option>
+                      <option value="name-desc">이름 내림차순</option>
+                    </select>
+                    <ChevronsUpDown size={15} aria-hidden="true" />
                   </div>
                 </div>
-
-                {isLoading ? (
-                  <p style={{ padding: '2rem', textAlign: 'center' }}>불러오는 중…</p>
-                ) : (
-                  <div className="repository-table" role="table" aria-label="저장소 목록">
-                    <div className="repository-row repository-table-head" role="row">
-                      <span>저장소</span>
-                      <span>기본 브랜치</span>
-                      <span>마지막 검사</span>
-                      <span>분석 결과</span>
-                      <span>상태</span>
-                    </div>
-                    {visibleRepositories.map((repo) => {
-                      const meta = STATUS_META[repo.status] ?? { label: repo.status, tone: '' }
-                      return (
-                        <button
-                          className="repository-row"
-                          role="row"
-                          key={repo.id}
-                          onClick={() => setSelectedRepo(repo)}
-                        >
-                          <strong>{repo.name}</strong>
-                          <span>{repo.branch}</span>
-                          <span>{fmtRelative(repo.lastScannedAt)}</span>
-                          <span>{repo.findingCount}건</span>
-                          <b className={meta.tone}>{meta.label}</b>
-                        </button>
-                      )
-                    })}
-                    {visibleRepositories.length === 0 && (
-                      <p className="repository-empty" role="status">검색 결과가 없습니다.</p>
-                    )}
-                  </div>
-                )}
-              </section>
-            </div>
-
-            <aside className="scan-panel" id="scan">
-              <div className="scan-heading">
-                <h2>스캔 시작</h2>
-                <p>선택한 저장소와 브랜치로 파이프라인을 실행합니다.</p>
               </div>
-              {displayRepo ? (
-                <>
-                  <div className="selected-repository">
-                    <div>
-                      <strong>{displayRepo.name}</strong>
-                      <span>{displayRepo.fullName}</span>
-                    </div>
-                    <b>{displayRepo.language}</b>
-                  </div>
-                  <label className="scan-label" htmlFor="scan-branch">브랜치</label>
-                  <div className="branch-dropdown">
-                    <select
-                      className="branch-select"
-                      id="scan-branch"
-                      value={selectedBranch}
-                      onChange={(e) => setSelectedBranch(e.target.value)}
-                    >
-                      <option value="main">main</option>
-                      <option value="develop">develop</option>
-                    </select>
-                    <ChevronDown size={16} aria-hidden="true" />
-                  </div>
-                  <div className="scan-divider" />
-                  <dl className="scan-details">
-                    <div><dt>마지막 검사</dt><dd>{fmtRelative(displayRepo.lastScannedAt)} · Finding {displayRepo.findingCount}건</dd></div>
-                    <div><dt>기본 브랜치</dt><dd>{displayRepo.branch}</dd></div>
-                  </dl>
+
+              <div className="repository-table" role="table">
+                <div className="repository-row repository-table-head" role="row">
+                  <span>저장소</span><span>기본 브랜치</span><span>언어</span><span>연결일</span>
+                </div>
+                {loading && <p className="repository-empty">불러오는 중…</p>}
+                {!loading && visible.map((r) => (
                   <button
-                    className="scan-start-button"
-                    disabled={startScan.isPending}
-                    onClick={() => startScan.mutate({ repositoryId: displayRepo.id, branch: selectedBranch })}
+                    className={`repository-row${selectedId === r.id ? " selected" : ""}`}
+                    key={r.id}
+                    onClick={() => { setSelectedId(r.id); setScanBranch(r.defaultBranch); }}
                   >
-                    {startScan.isPending ? '시작 중…' : '스캔 시작'}
+                    <strong>{r.fullName}</strong>
+                    <span>{r.defaultBranch}</span>
+                    <span>{r.language ?? "-"}</span>
+                    <span>{new Date(r.connectedAt).toLocaleDateString("ko-KR")}</span>
                   </button>
-                </>
-              ) : (
-                <p style={{ padding: '1rem', color: 'var(--muted)' }}>저장소를 선택하세요.</p>
-              )}
-            </aside>
+                ))}
+                {!loading && visible.length === 0 && <p className="repository-empty">저장소가 없습니다. 저장소를 추가해주세요.</p>}
+              </div>
+            </section>
           </div>
-        </ScreenContent>
-      </main>
-    </AuthGuard>
-  )
+
+          <aside className="scan-panel">
+            <div className="scan-heading"><h2>스캔 시작</h2><p>선택한 저장소와 브랜치로 파이프라인을 실행합니다.</p></div>
+            {selected ? (
+              <>
+                <div className="selected-repository">
+                  <div><strong>{selected.fullName}</strong><span>github.com/{selected.fullName}</span></div>
+                  <b>{selected.language ?? "-"}</b>
+                </div>
+                <label className="scan-label" htmlFor="scan-branch">브랜치</label>
+                <div className="branch-dropdown">
+                  <input id="scan-branch" className="branch-select" value={scanBranch} onChange={(e) => setScanBranch(e.target.value)} placeholder={selected.defaultBranch} />
+                  <ChevronDown size={16} aria-hidden="true" />
+                </div>
+                <Link
+                  className="scan-start-button"
+                  href={`/scan?repoId=${selected.id}&ref=${encodeURIComponent(scanBranch || selected.defaultBranch)}`}
+                >
+                  스캔 시작
+                </Link>
+              </>
+            ) : (
+              <p className="repository-empty">저장소를 선택하세요.</p>
+            )}
+          </aside>
+        </div>
+      </ScreenContent>
+    </main>
+  );
 }

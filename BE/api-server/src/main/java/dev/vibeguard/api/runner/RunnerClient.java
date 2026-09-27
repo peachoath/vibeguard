@@ -33,12 +33,20 @@ public class RunnerClient {
     /**
      * 런너에 스캔 작업 위임. 실패 시 예외를 던지므로 호출부(오케스트레이터)에서
      * 스캔을 FAILED 처리하도록 한다.
+     *
+     * @param githubToken 사용자의 복호화된 GitHub access token.
+     *                    A4(PR 생성) 단계에서 github-mcp에 주입된다.
+     *                    null 이면 본문에서 제외한다(개발·테스트 시 사용).
      */
-    public void delegateScan(String scanId, String repoUrl, String ref) {
-        Map<String, Object> body = Map.of(
-            "scanId", scanId,
-            "repoUrl", repoUrl,
-            "ref", ref == null ? "" : ref);
+    public void delegateScan(String scanId, String repoUrl, String ref, String githubToken) {
+        var bodyBuilder = new java.util.LinkedHashMap<String, Object>();
+        bodyBuilder.put("scanId", scanId);
+        bodyBuilder.put("repoUrl", repoUrl);
+        bodyBuilder.put("ref", ref == null ? "" : ref);
+        if (githubToken != null) {
+            bodyBuilder.put("githubToken", githubToken);
+        }
+        Map<String, Object> body = java.util.Collections.unmodifiableMap(bodyBuilder);
 
         byte[] rawBody = serialize(body);
         String signature = hmacSigner.sign(rawBody);

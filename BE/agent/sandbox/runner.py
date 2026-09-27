@@ -47,9 +47,28 @@ CONTAINER_NAME_PREFIX = "vibeguard-"
 # 겹치면 게이트가 시간 초과를 평범한 테스트 결과로 읽어 버린다.
 TIMEOUT_EXIT_CODE = -1
 
-# 이미지에 구워 넣은 비특권 사용자. 호스트 사용자의 uid·gid와 일치시켜서
-# /out에 쓴 파일이 호스트 사용자 소유로 돌아오게 한다.
-SANDBOX_USER = "1000:1000"
+def _sandbox_user() -> str:
+    """컨테이너에 넘길 --user uid:gid를 결정한다.
+
+    우선순위:
+    1. VIBEGUARD_SANDBOX_USER 환경변수 — 소켓 마운트 배포처럼 getuid()가
+       호스트 소유자와 다를 때 명시적으로 덮는 탈출구.
+    2. os.getuid():os.getgid() — 러너 프로세스의 실제 uid·gid.
+       단, root(0)이면 컨테이너도 root가 되어 격리가 무너지므로 즉시 거부한다.
+    """
+    override = os.environ.get("VIBEGUARD_SANDBOX_USER")
+    if override:
+        return override
+    uid, gid = os.getuid(), os.getgid()
+    if uid == 0 or gid == 0:
+        raise RuntimeError(
+            "러너를 root로 실행하지 마시오. 비특권 계정으로 돌리거나 "
+            "VIBEGUARD_SANDBOX_USER 환경변수로 uid:gid를 명시하시오."
+        )
+    return f"{uid}:{gid}"
+
+
+SANDBOX_USER = _sandbox_user()
 
 # 자원 상한. NFR-S1이 요구하는 값으로 맞췄다. 신뢰할 수 없는 코드가 호스트를 굶겨서는
 # 안 되지만, 실제 리포지토리의 테스트 스위트에는 처음의 512m보다 넉넉한 공간이 필요하다.

@@ -11,6 +11,12 @@ export interface RunnerConfig {
   agentModel: string
   /** 세션 1개당 비용 상한(USD). 넘으면 SDK가 세션을 중단한다. */
   agentMaxBudgetUsd: number
+  /**
+   * DRY_RUN=1 이면 Claude 세션을 호출하지 않고 시드 리포(urllib3==1.24.1)에 맞춘
+   * 목 출력을 반환한다. API 비용 없이 HTTP/HMAC/SSE/상태머신 전체 흐름을 검증할 때 쓴다.
+   * PR 제출 직전에 이 값을 비우고 ANTHROPIC_API_KEY를 채운다.
+   */
+  dryRun: boolean
 }
 
 export function loadConfig(): RunnerConfig {
@@ -22,5 +28,6 @@ export function loadConfig(): RunnerConfig {
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     agentModel: process.env.AGENT_MODEL ?? 'sonnet',
     agentMaxBudgetUsd: Number(process.env.AGENT_MAX_BUDGET_USD ?? 0.5),
+    dryRun: process.env.DRY_RUN === '1',
   }
 }
