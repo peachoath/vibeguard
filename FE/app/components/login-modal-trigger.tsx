@@ -2,7 +2,6 @@
 
 import { Info, LockKeyhole, X } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 
 type LoginModalTriggerProps = {
@@ -61,7 +60,7 @@ export function LoginModalProvider({ children }: { children: ReactNode }) {
             </div>
 
             <div className="login-dialog-actions">
-              <Link className="login-oauth-button" href="/login">연결하기</Link>
+              <a className="login-oauth-button" href="https://github.com/login">연결하기</a>
               <button type="button" className="login-cancel-button" onClick={() => setOpen(false)}>취소</button>
             </div>
 

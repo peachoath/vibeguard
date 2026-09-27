@@ -106,8 +106,7 @@ a { color: inherit; text-decoration: none; }
 .hero-copy p { margin: 27px 0 38px; color: var(--muted); font-size: 18px; letter-spacing: -.52px; }
 .hero-actions { display: flex; gap: 16px; }
 .button { height: 50px; padding: 0; border: 0; border-radius: 11px; display: grid; place-items: center; font-size: 16px; font-weight: 700; cursor: pointer; }
-.button-primary { width: 197px; color: #fff; background: linear-gradient(135deg, #65a7ff, #2f7ff0); box-shadow: 0 8px 17px rgba(47, 128, 240, .3); }
-.button-secondary { width: 167px; background: rgba(250, 252, 255, .88); border: 1px solid #e5eaf2; box-shadow: 0 5px 15px rgba(25, 54, 95, .08); }
+.button-primary { width: 296px; color: #fff; background: linear-gradient(135deg, #65a7ff, #2f7ff0); box-shadow: 0 8px 17px rgba(47, 128, 240, .3); }
 
 .verification-panel { position: absolute; top: 0; right: 0; width: min(46.85vw, 683px); height: 451px; padding: 22px 24px 17px; border: 1px solid var(--line); border-radius: 24px; background: rgba(255, 255, 255, .93); }
 .panel-heading { height: 63px; display: flex; align-items: flex-start; justify-content: space-between; }
@@ -264,7 +263,7 @@ a { color: inherit; text-decoration: none; }
   .hero-copy h1 { font-size: clamp(38px, 11vw, 51px); letter-spacing: -2px; }
   .hero-copy p { margin: 24px auto 30px; font-size: 16px; line-height: 1.65; }
   .hero-actions { justify-content: center; }
-  .button-primary, .button-secondary { width: min(47%, 197px); }
+  .button-primary { width: min(72%, 296px); }
   .verification-panel { height: auto; margin-top: 52px; padding: 20px 18px; border-radius: 22px; }
   .panel-heading { height: auto; min-height: 58px; gap: 12px; }
   .panel-heading > div { align-items: flex-start; flex-direction: column; gap: 8px; }
@@ -286,7 +285,7 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 420px) {
   .header-cta { width: 130px; }
   .hero-actions { flex-direction: column; }
-  .button-primary, .button-secondary { width: 100%; }
+  .button-primary { width: 100%; }
   .feature-card br { display: none; }
 }
 

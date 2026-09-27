@@ -1,6 +1,8 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
-import { LoginModalProvider } from "./components/login-modal-trigger";
+import LoginModalTrigger, { LoginModalProvider } from "./components/login-modal-trigger";
 import ScreenContent from "./components/screen-content";
 import LandingHeader from "./components/landing-header";
 import ScrollDots from "./components/scroll-dots";
@@ -11,7 +13,7 @@ import PRTabs from "./components/pr-tabs";
 export default function Home() {
   return (
     <LoginModalProvider>
-    <main className="landing-page">
+      <main className="landing-page">
       <Image className="landing-background" src="/landing_back.png?v=2" alt="" width={3844} height={3420} unoptimized priority />
 
       <LandingHeader />
@@ -28,8 +30,7 @@ export default function Home() {
               <h1><span className="hero-highlight">취약점</span>은 줄이고<br />기능은 그대로</h1>
               <p>공식 DB 검증부터 안전 버전 결정, 회귀 테스트, PR 생성까지 순서대로 처리됩니다.</p>
               <div className="hero-actions">
-                <Link className="button button-primary" href="/repositories" scroll={false}>GitHub 저장소 연결</Link>
-                <a className="button button-secondary" href="#how-it-works">작동 방식 보기</a>
+                <LoginModalTrigger variant="primary" label="점검하기" />
               </div>
             </div>
 
@@ -184,7 +185,7 @@ export default function Home() {
       </ScreenContent>
 
       <span id="docs" className="anchor-target" />
-    </main>
+      </main>
     </LoginModalProvider>
   );
 }
