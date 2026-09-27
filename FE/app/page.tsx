@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import LoginModalTrigger, { LoginModalProvider } from "./components/login-modal-trigger";
 import ScreenContent from "./components/screen-content";
@@ -5,7 +7,7 @@ import ScreenContent from "./components/screen-content";
 export default function Home() {
   return (
     <LoginModalProvider>
-    <main className="landing-page">
+      <main className="landing-page">
       <Image className="landing-background" src="/landing_back.png?v=2" alt="" width={3844} height={3420} unoptimized priority />
 
       <header className="site-header">
@@ -27,7 +29,6 @@ export default function Home() {
           <p>공식 DB 검증부터 안전 버전 결정, 회귀 테스트, PR 생성까지 자동으로 이어집니다.</p>
           <div className="hero-actions">
             <LoginModalTrigger variant="primary" label="점검하기" />
-            <a className="button button-secondary" href="#product">작동 방식 보기</a>
           </div>
         </div>
 
@@ -74,7 +75,7 @@ export default function Home() {
       <span id="docs" className="anchor-target" />
       <span id="github" className="anchor-target" />
       <span id="pr-example" className="anchor-target" />
-    </main>
+      </main>
     </LoginModalProvider>
   );
 }
