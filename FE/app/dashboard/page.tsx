@@ -135,14 +135,12 @@ export default function DashboardPage() {
                 <div className="security-card-heading">
                   <div><h2>패치 성공률</h2><p>패치 후 기존 테스트 전체 통과 비율</p></div>
                 </div>
-                <div className="trend-chart">
-                  <div className="gauge">
-                    <div><strong>{patchRate}%</strong><span>패치 성공률</span></div>
-                  </div>
-                  <div className="gauge-summary">
-                    <div><span>평균 처리 시간</span><strong>{formatDuration(summary?.avgDurationMs ?? null)}</strong></div>
-                    <div><span>총 스캔</span><strong>{summary?.totalScans ?? 0}건</strong></div>
-                  </div>
+                <div className="gauge">
+                  <div><strong>{patchRate}%</strong><span>패치 성공률</span></div>
+                </div>
+                <div className="gauge-summary">
+                  <div><span>평균 처리 시간</span><strong>{formatDuration(summary?.avgDurationMs ?? null)}</strong></div>
+                  <div><span>총 스캔</span><strong>{summary?.totalScans ?? 0}건</strong></div>
                 </div>
               </section>
 
