@@ -60,48 +60,61 @@ const githubServerEntry =
 // GitHub API 단건 호출은 5초 이내다. PR 생성처럼 여러 번 호출해도 30초면 충분하다.
 const GITHUB_TIMEOUT_MS = 30_000
 
-/** 우리가 직접 만든 MCP 서버 3종 + 공식 GitHub MCP. */
-const SERVERS: Record<string, McpServerConfig> = {
-  scanner: {
-    type: 'stdio',
-    command: process.execPath,
-    args: [entry('scanner-mcp')],
-    env: childEnv(),
-    timeout: SANDBOX_TIMEOUT_MS,
-  },
-  testrunner: {
-    type: 'stdio',
-    command: process.execPath,
-    args: [entry('testrunner-mcp')],
-    env: childEnv(),
-    timeout: SANDBOX_TIMEOUT_MS,
-  },
-  advisory: {
-    type: 'stdio',
-    command: process.execPath,
-    args: [entry('advisory-mcp')],
-    // 두 키는 없어도 동작한다. 있으면 외부 조회 요청 제한만 느슨해진다.
-    env: childEnv(['NVD_API_KEY', 'GITHUB_TOKEN']),
-    timeout: ADVISORY_TIMEOUT_MS,
-  },
-  github: {
-    type: 'stdio',
-    command: process.execPath,
-    args: [githubServerEntry],
-    // GITHUB_TOKEN이 없으면 서버가 뜨지 않는다. 필수값.
-    env: childEnv(['GITHUB_TOKEN']),
-    timeout: GITHUB_TIMEOUT_MS,
-  },
+/**
+ * 우리가 직접 만든 MCP 서버 3종 + 공식 GitHub MCP.
+ * github 서버는 스캔 작업별 토큰이 필요하므로 buildServers()로 매번 생성한다.
+ */
+function buildServers(githubToken?: string): Record<string, McpServerConfig> {
+  const servers: Record<string, McpServerConfig> = {
+    scanner: {
+      type: 'stdio',
+      command: process.execPath,
+      args: [entry('scanner-mcp')],
+      env: childEnv(),
+      timeout: SANDBOX_TIMEOUT_MS,
+    },
+    testrunner: {
+      type: 'stdio',
+      command: process.execPath,
+      args: [entry('testrunner-mcp')],
+      env: childEnv(),
+      timeout: SANDBOX_TIMEOUT_MS,
+    },
+    advisory: {
+      type: 'stdio',
+      command: process.execPath,
+      args: [entry('advisory-mcp')],
+      // 두 키는 없어도 동작한다. 있으면 외부 조회 요청 제한만 느슨해진다.
+      env: childEnv(['NVD_API_KEY', 'GITHUB_TOKEN']),
+      timeout: ADVISORY_TIMEOUT_MS,
+    },
+  }
+
+  // GITHUB_TOKEN이 없으면 서버가 뜨지 않는다. 토큰이 있을 때만 등록.
+  if (githubToken) {
+    servers['github'] = {
+      type: 'stdio',
+      command: process.execPath,
+      args: [githubServerEntry],
+      env: { ...childEnv(), GITHUB_TOKEN: githubToken },
+      timeout: GITHUB_TIMEOUT_MS,
+    }
+  }
+
+  return servers
 }
 
 /**
  * 해당 단계에 필요한 서버만 골라 준다. 세션마다 최소한만 주입하는 것이
  * allowedTools 화이트리스트와 같은 목적이다(PRD §5.3).
+ *
+ * @param githubToken 사용자의 GitHub access token. A4에서 PR 생성에 사용.
  */
-export function mcpServersFor(agent: AgentSpec): Record<string, McpServerConfig> {
+export function mcpServersFor(agent: AgentSpec, githubToken?: string): Record<string, McpServerConfig> {
+  const all = buildServers(githubToken)
   const chosen: Record<string, McpServerConfig> = {}
   for (const name of agent.mcpServers) {
-    const config = SERVERS[name]
+    const config = all[name]
     if (!config) continue
     chosen[name] = config
   }

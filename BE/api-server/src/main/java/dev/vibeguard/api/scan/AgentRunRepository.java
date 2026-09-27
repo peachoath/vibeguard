@@ -8,4 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface AgentRunRepository extends JpaRepository<AgentRun, UUID> {
 
     List<AgentRun> findByScanIdOrderByAgentNo(UUID scanId);
+
+    java.util.Optional<AgentRun> findByScanIdAndAgentNo(UUID scanId, short agentNo);
 }

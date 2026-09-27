@@ -32,8 +32,8 @@ spring:
           github:
             client-id: ${GITHUB_CLIENT_ID:changeme}
             client-secret: ${GITHUB_CLIENT_SECRET:changeme}
-            # 로그인에 필요한 최소 스코프. 리포 스캔(F-02)이 붙을 때 repo 추가 예정.
-            scope: read:user,user:email
+            # repo 스코프: A4(PR 자동 생성)에서 사용자 레포에 브랜치·커밋·PR을 만들 때 필요.
+            scope: read:user,user:email,repo
 
 vibeguard:
   app:

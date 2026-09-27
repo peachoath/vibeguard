@@ -33,4 +33,35 @@ public interface FindingRepository extends JpaRepository<Finding, UUID> {
     /** 대시보드 심각도 분포 집계용. */
     @Query("select f.severity, count(f) from Finding f group by f.severity")
     java.util.List<Object[]> countBySeverity();
+
+    /**
+     * Finding 소유권 검증 조회 — IDOR 방지용.
+     * finding → scan → repository → user 경로로 검증.
+     * 존재하지 않거나 소유권 없는 경우 모두 empty 반환(존재 여부 미노출).
+     */
+    @Query("select f from Finding f "
+        + "join Scan s on s.id = f.scanId "
+        + "join Repository r on r.id = s.repositoryId "
+        + "where f.id = :findingId and r.userId = :userId")
+    java.util.Optional<Finding> findByIdAndUserId(
+        @Param("findingId") UUID findingId,
+        @Param("userId") UUID userId);
+
+    /**
+     * 스캔이 해당 사용자 소유인지 확인 — Finding 목록 조회 전 스캔 소유권 사전 검증용.
+     */
+    @Query("select count(s) > 0 from Scan s "
+        + "join Repository r on r.id = s.repositoryId "
+        + "where s.id = :scanId and r.userId = :userId")
+    boolean isScanOwnedByUser(
+        @Param("scanId") UUID scanId,
+        @Param("userId") UUID userId);
+
+    /**
+     * A3 콜백에서 패치-Finding 연결용 — scanId + packageName으로 Finding 단건 조회.
+     * 같은 패키지가 여러 CVE로 중복 등록된 경우 첫 번째(생성순)를 반환한다.
+     */
+    java.util.Optional<Finding> findFirstByScanIdAndPackageNameOrderByIdAsc(
+        UUID scanId,
+        String packageName);
 }

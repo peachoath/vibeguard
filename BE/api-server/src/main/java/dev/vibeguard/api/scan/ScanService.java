@@ -5,6 +5,7 @@ import dev.vibeguard.api.common.NotFoundException;
 import dev.vibeguard.api.repository.Repositories;
 import dev.vibeguard.api.repository.Repository;
 import dev.vibeguard.api.runner.RunnerClient;
+import dev.vibeguard.api.security.TokenCipher;
 import dev.vibeguard.api.user.User;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -31,13 +32,16 @@ public class ScanService {
     private final Repositories repositories;
     private final RunnerClient runnerClient;
     private final ScanCreator scanCreator;
+    private final TokenCipher tokenCipher;
 
     public ScanService(ScanRepository scanRepository, Repositories repositories,
-                       RunnerClient runnerClient, ScanCreator scanCreator) {
+                       RunnerClient runnerClient, ScanCreator scanCreator,
+                       TokenCipher tokenCipher) {
         this.scanRepository = scanRepository;
         this.repositories = repositories;
         this.runnerClient = runnerClient;
         this.scanCreator = scanCreator;
+        this.tokenCipher = tokenCipher;
     }
 
     /**
@@ -50,7 +54,8 @@ public class ScanService {
 
         try {
             String repoUrl = "https://github.com/" + repo.getFullName() + ".git";
-            runnerClient.delegateScan(scan.getId().toString(), repoUrl, scan.getRef());
+            String plainToken = tokenCipher.decrypt(user.getAccessToken());
+            runnerClient.delegateScan(scan.getId().toString(), repoUrl, scan.getRef(), plainToken);
         } catch (Exception ex) {
             log.error("[scan] 런너 위임 실패 scanId={} — FAILED 처리", scan.getId(), ex);
             markFailed(scan.getId(), "RUNNER_DELEGATION_FAILED");
@@ -63,16 +68,27 @@ public class ScanService {
         return scanRepository.findTop50ByUser(user.getId());
     }
 
+    /** 내부 전용 단순 조회 — 콜백/상태전이 등 사용자 컨텍스트가 없는 경로에만 사용. */
     @Transactional(readOnly = true)
-    public Scan get(UUID scanId) {
+    Scan get(UUID scanId) {
         return scanRepository.findById(scanId)
             .orElseThrow(() -> new NotFoundException("스캔을 찾을 수 없습니다: " + scanId));
     }
 
-    /** 스캔 취소 — 진행 중일 때만 가능. 종료 상태면 409. */
+    /**
+     * 소유권 검증 조회 — 사용자 대면 API용 (IDOR 방지).
+     * 존재하지 않는 스캔과 타인 스캔에 동일한 404를 반환하여 존재 여부를 노출하지 않는다.
+     */
+    @Transactional(readOnly = true)
+    public Scan getForUser(UUID scanId, UUID userId) {
+        return scanRepository.findByIdAndUserId(scanId, userId)
+            .orElseThrow(() -> new NotFoundException("스캔을 찾을 수 없습니다: " + scanId));
+    }
+
+    /** 스캔 취소 — 진행 중일 때만 가능. 종료 상태면 409. 소유권도 함께 검증. */
     @Transactional
-    public void cancel(UUID scanId) {
-        Scan scan = get(scanId);
+    public void cancelForUser(UUID scanId, UUID userId) {
+        Scan scan = getForUser(scanId, userId);
         if (scan.getStatus().isTerminal()) {
             throw new ConflictException("이미 종료된 스캔은 취소할 수 없습니다.");
         }

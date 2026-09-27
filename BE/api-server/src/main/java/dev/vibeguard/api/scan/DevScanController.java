@@ -1,13 +1,19 @@
 package dev.vibeguard.api.scan;
 
+import dev.vibeguard.api.finding.Finding;
+import dev.vibeguard.api.finding.FindingRepository;
 import dev.vibeguard.api.runner.RunnerClient;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,16 +35,38 @@ class DevScanController {
     private static final String DEV_REPO_ID = "00000000-0000-0000-0000-000000000002";
 
     private final ScanRepository scanRepository;
+    private final FindingRepository findingRepository;
     private final RunnerClient runnerClient;
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;
 
-    DevScanController(ScanRepository scanRepository, RunnerClient runnerClient,
-                      JdbcTemplate jdbc, TransactionTemplate tx) {
+    DevScanController(ScanRepository scanRepository, FindingRepository findingRepository,
+                      RunnerClient runnerClient, JdbcTemplate jdbc, TransactionTemplate tx) {
         this.scanRepository = scanRepository;
+        this.findingRepository = findingRepository;
         this.runnerClient = runnerClient;
         this.jdbc = jdbc;
         this.tx = tx;
+    }
+
+    @GetMapping("/scans/{id}")
+    public ResponseEntity<Map<String, Object>> status(@PathVariable String id) {
+        return scanRepository.findById(UUID.fromString(id))
+            .map(s -> {
+                var findings = findingRepository.findByScanId(s.getId(), Pageable.unpaged()).stream()
+                    .map(f -> Map.of(
+                        "cveId", f.getCveId() != null ? f.getCveId() : "",
+                        "packageName", f.getPackageName() != null ? f.getPackageName() : "",
+                        "currentVersion", f.getCurrentVersion() != null ? f.getCurrentVersion() : "",
+                        "severity", f.getSeverity() != null ? f.getSeverity().name() : ""))
+                    .toList();
+                return ResponseEntity.ok(Map.<String, Object>of(
+                    "scanId", s.getId().toString(),
+                    "status", s.getStatus().name(),
+                    "findingCount", findings.size(),
+                    "findings", findings));
+            })
+            .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping("/scans")
@@ -64,7 +92,7 @@ class DevScanController {
         // ② 커밋 완료 후 러너 위임
         String scanId = scan.getId().toString();
         try {
-            runnerClient.delegateScan(scanId, repoUrl, ref);
+            runnerClient.delegateScan(scanId, repoUrl, ref, null);
         } catch (Exception ex) {
             tx.execute(s -> {
                 scan.setStatus(ScanStatus.FAILED);
