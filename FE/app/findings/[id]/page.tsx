@@ -6,6 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import AppHeader from "../../components/app-header";
 import ScreenContent from "../../components/screen-content";
 import { apiFetch } from "@/lib/api";
+import { Sk } from "../../components/skeleton";
+import { ErrorView } from "../../components/error-view";
 
 interface FindingDetailDto {
   id: string;
@@ -41,15 +43,19 @@ export default function FindingDetailPage() {
   const router = useRouter();
   const [finding, setFinding] = useState<FindingDetailDto | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  function load() {
     if (!id) return;
+    setLoading(true);
+    setError(false);
     apiFetch<FindingDetailDto>(`/api/v1/findings/${id}`)
       .then(setFinding)
-      .catch((e) => setError(e.message))
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [id]);
+  }
+
+  useEffect(() => { load(); }, [id]);
 
   return (
     <main className="results-page">
@@ -58,30 +64,95 @@ export default function FindingDetailPage() {
         <section className="results-heading">
           <div>
             <h1>Finding 상세</h1>
-            <p>{finding?.packageName ?? finding?.filePath ?? (loading ? "불러오는 중…" : "알 수 없음")}</p>
+            <p>
+              {loading ? <Sk w={180} h={14} style={{ display: "inline-block" }} /> :
+               finding ? `${finding.packageName ?? finding.filePath ?? "알 수 없음"} · ${finding.severity}` : "—"}
+            </p>
           </div>
           <div className="results-actions">
-            <button onClick={() => router.back()}>← 돌아가기</button>
+            <button className="secondary-button" onClick={() => router.back()}>← 돌아가기</button>
           </div>
         </section>
 
-        {loading && <p className="findings-empty">불러오는 중…</p>}
-        {error && <p className="findings-empty">{error}</p>}
+        {loading && (
+          <div className="finding-detail-card" aria-hidden="true">
+            <dl className="finding-meta">
+              {Array.from({ length: 6 }, (_, i) => (
+                <div key={i}>
+                  <Sk w={60} h={10} r={3} />
+                  <Sk w={90} h={16} r={4} style={{ marginTop: 6 }} />
+                </div>
+              ))}
+            </dl>
+            <div className="finding-description">
+              <Sk w={60} h={16} r={4} />
+              <Sk w="100%" h={13} r={4} style={{ marginTop: 12 }} />
+              <Sk w="80%" h={13} r={4} style={{ marginTop: 6 }} />
+            </div>
+          </div>
+        )}
 
-        {finding && (
+        {error && !loading && <ErrorView onRetry={load} />}
+
+        {finding && !loading && (
           <div className="finding-detail-card">
             <dl className="finding-meta">
-              <div><dt>CVE</dt><dd>{finding.cveId ?? "-"}</dd></div>
-              <div><dt>CWE</dt><dd>{finding.cweId ?? "-"}</dd></div>
-              <div><dt>심각도</dt><dd><span className={`severity-badge ${finding.severity.toLowerCase()}`}>{SEVERITY_LABELS[finding.severity] ?? finding.severity}</span></dd></div>
-              <div><dt>CVSS</dt><dd>{finding.cvssScore ?? "-"}</dd></div>
-              <div><dt>판정</dt><dd><span className={`finding-verdict ${finding.verdict === "MANUAL" ? "manual" : finding.verdict === "IGNORE" ? "ignore" : "patch"}`}>{VERDICT_LABELS[finding.verdict] ?? finding.verdict}</span></dd></div>
-              <div><dt>상태</dt><dd>{finding.status}</dd></div>
-              {finding.packageName && <div><dt>패키지</dt><dd>{finding.packageName}</dd></div>}
-              {finding.currentVersion && <div><dt>현재 버전</dt><dd>{finding.currentVersion}</dd></div>}
-              {finding.recommendedVersion && <div><dt>권장 버전</dt><dd>{finding.recommendedVersion}</dd></div>}
-              {finding.filePath && <div><dt>파일</dt><dd>{finding.filePath}{finding.lineStart ? `:${finding.lineStart}` : ""}</dd></div>}
-              {finding.manifestPath && <div><dt>Manifest</dt><dd>{finding.manifestPath}</dd></div>}
+              <div>
+                <dt>CVE</dt>
+                <dd>{finding.cveId ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>CWE</dt>
+                <dd>{finding.cweId ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>심각도</dt>
+                <dd>
+                  <span className={`severity-badge ${finding.severity.toLowerCase()}`}>
+                    {SEVERITY_LABELS[finding.severity] ?? finding.severity}
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt>CVSS 점수</dt>
+                <dd>{finding.cvssScore ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>판정</dt>
+                <dd>
+                  <span className={`finding-verdict ${finding.verdict === "MANUAL" ? "manual" : finding.verdict === "IGNORE" ? "ignore" : "patch"}`}>
+                    {VERDICT_LABELS[finding.verdict] ?? finding.verdict}
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt>상태</dt>
+                <dd>{finding.status}</dd>
+              </div>
+              {finding.packageName && (
+                <div>
+                  <dt>패키지</dt>
+                  <dd>{finding.packageName}</dd>
+                </div>
+              )}
+              {finding.currentVersion && finding.recommendedVersion && (
+                <div>
+                  <dt>버전 변경</dt>
+                  <dd>{finding.currentVersion} → {finding.recommendedVersion}</dd>
+                </div>
+              )}
+              {finding.filePath && (
+                <div>
+                  <dt>파일</dt>
+                  <dd>{finding.filePath}{finding.lineStart ? `:${finding.lineStart}` : ""}</dd>
+                </div>
+              )}
+              {finding.manifestPath && (
+                <div>
+                  <dt>Manifest</dt>
+                  <dd>{finding.manifestPath}</dd>
+                </div>
+              )}
             </dl>
 
             {finding.description && (
@@ -103,15 +174,22 @@ export default function FindingDetailPage() {
                 <h3>참고 자료</h3>
                 <ul>
                   {finding.references.map((ref) => (
-                    <li key={ref}><a href={ref} target="_blank" rel="noreferrer">{ref}</a></li>
+                    <li key={ref}>
+                      <a href={ref} target="_blank" rel="noreferrer">{ref}</a>
+                    </li>
                   ))}
                 </ul>
               </div>
             )}
 
-            <div className="finding-actions">
-              <Link href={`/api/v1/findings/${id}/evidence`} className="secondary-button" target="_blank">증거 JSON</Link>
-              <Link href={`/api/v1/findings/${id}/diff`} className="secondary-button" target="_blank">Diff JSON</Link>
+            <div className="finding-detail-actions">
+              <Link href={`/api/v1/findings/${id}/evidence`} target="_blank">
+                증거 JSON
+              </Link>
+              <Link href={`/api/v1/findings/${id}/diff`} target="_blank">
+                Diff JSON
+              </Link>
+              <Link href="/results">← 목록으로</Link>
             </div>
           </div>
         )}
