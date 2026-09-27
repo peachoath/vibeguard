@@ -172,7 +172,7 @@ class ScanEventHandlerTest {
         // FindingRepository 스텁 — scanId+packageName으로 Finding 반환
         Finding mockFinding = new Finding(scanId, FindingType.SCA);
         mockFinding.setPackageName("requests");
-        lenient().when(findingRepository.findFirstByScanIdAndPackageName(eq(scanId), eq("requests")))
+        lenient().when(findingRepository.findFirstByScanIdAndPackageNameOrderByIdAsc(eq(scanId), eq("requests")))
             .thenReturn(Optional.of(mockFinding));
 
         // PatchRepository 스텁 — 기존 패치 없음 → 새로 생성
@@ -208,7 +208,7 @@ class ScanEventHandlerTest {
 
         Finding mockFinding = new Finding(scanId, FindingType.SCA);
         mockFinding.setPackageName("requests");
-        lenient().when(findingRepository.findFirstByScanIdAndPackageName(eq(scanId), eq("requests")))
+        lenient().when(findingRepository.findFirstByScanIdAndPackageNameOrderByIdAsc(eq(scanId), eq("requests")))
             .thenReturn(Optional.of(mockFinding));
         lenient().when(patchRepository.findFirstByFindingIdOrderByAttemptNoDesc(any()))
             .thenReturn(Optional.empty());
@@ -237,7 +237,7 @@ class ScanEventHandlerTest {
              "patches":[{"packageName":"unknown-pkg","from":"1.0.0","to":"2.0.0"}]}
             """;
 
-        lenient().when(findingRepository.findFirstByScanIdAndPackageName(any(), any()))
+        lenient().when(findingRepository.findFirstByScanIdAndPackageNameOrderByIdAsc(any(), any()))
             .thenReturn(Optional.empty());
 
         RunnerEvent event = stageEvent("REGRESSION_CHECK", 3, "DONE",
@@ -258,7 +258,7 @@ class ScanEventHandlerTest {
 
         Finding mockFinding = new Finding(scanId, FindingType.SCA);
         mockFinding.setPackageName("requests");
-        lenient().when(findingRepository.findFirstByScanIdAndPackageName(any(), any()))
+        lenient().when(findingRepository.findFirstByScanIdAndPackageNameOrderByIdAsc(any(), any()))
             .thenReturn(Optional.of(mockFinding));
 
         // 기존 패치 존재
