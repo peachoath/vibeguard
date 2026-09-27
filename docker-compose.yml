@@ -1,43 +1,83 @@
-# VibeGuard — 로컬 개발용 인프라 (PRD §12: 데모는 단일 VM + Docker Compose)
+# VibeGuard — 단일 VM 데모 인프라 (PRD §12: 데모는 단일 VM + Docker Compose)
 #
-# ⚠️ DB는 기본적으로 Supabase 관리형 PostgreSQL 16을 사용합니다(.env의 DB_* 참고).
-#    아래 postgres 서비스는 "오프라인 로컬 개발 폴백"용입니다 — 쓰려면 .env의
-#    로컬 DB_URL 주석을 활성화하세요. 공유 개발/운영은 Supabase로 붙습니다.
+# 구성: postgres(로컬 DB) + api-server(Spring Boot).
+#   - DB는 기본적으로 이 로컬 postgres를 쓴다. Supabase 관리형을 쓰려면
+#     루트 .env의 DB_URL/DB_USER/DB_PASSWORD를 Supabase 값으로 지정하면 된다.
+#   - agent-runner는 다른 담당(에이전트 팀) 영역이라 Dockerfile 작성 후 통합한다.
+#     아래 placeholder를 참고해 주석을 해제하면 된다.
 #
-# api-server / agent-runner 서비스는 각 Dockerfile 작성 후(W1 후반) 주석 해제해 통합합니다.
+# 사용법:
+#   cp BE/api-server/.env.example .env   # 루트에 .env 두고 값 채우기 (또는 아래 기본값 사용)
+#   docker compose up -d --build
+#   docker compose logs -f api-server
+#   docker compose down
 
 services:
   postgres:
     image: postgres:16
     container_name: vibeguard-postgres
     environment:
-      POSTGRES_DB: vibeguard
-      POSTGRES_USER: vibeguard
-      POSTGRES_PASSWORD: vibeguard
+      POSTGRES_DB: ${POSTGRES_DB:-vibeguard}
+      POSTGRES_USER: ${POSTGRES_USER:-vibeguard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vibeguard}
+    # 호스트 노출 포트. 로컬 5432가 다른 프로세스에 점유된 경우 .env의 POSTGRES_HOST_PORT로 변경.
+    # 컨테이너 간 통신(api-server→postgres)은 내부 네트워크(5432)를 쓰므로 영향 없음.
     ports:
-      - '5432:5432'
+      - '${POSTGRES_HOST_PORT:-5433}:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U vibeguard']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-vibeguard}']
       interval: 5s
       timeout: 3s
       retries: 10
 
-  # api-server:
-  #   build: ./BE/api-server
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #   environment:
-  #     DB_URL: jdbc:postgresql://postgres:5432/vibeguard
-  #   ports: ['8080:8080']
+  api-server:
+    build:
+      context: ./BE/api-server
+    container_name: vibeguard-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # DB: 기본은 컨테이너 내 postgres. Supabase로 붙이려면 .env에서 DB_URL 등을 오버라이드.
+      DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/vibeguard}
+      DB_USER: ${DB_USER:-vibeguard}
+      DB_PASSWORD: ${DB_PASSWORD:-vibeguard}
+      # GitHub OAuth (필수 — .env에 실제 값 지정)
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-changeme}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-changeme}
+      # 토큰 암호화 키(AES-256-GCM, base64 32B). 운영에선 반드시 교체.
+      TOKEN_ENC_KEY: ${TOKEN_ENC_KEY:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
+      # CORS 허용 오리진 (FE 배포 도메인)
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      # 로그인 성공 후 리다이렉트 URL
+      POST_LOGIN_URI: ${POST_LOGIN_URI:-http://localhost:5173/dashboard}
+      # Agent Runner 연동 (HMAC). agent-runner 통합 시 base-url을 컨테이너명으로.
+      RUNNER_BASE_URL: ${RUNNER_BASE_URL:-http://agent-runner:4000}
+      RUNNER_CALLBACK_SECRET: ${RUNNER_CALLBACK_SECRET:-dev-secret-change-me}
+    # 호스트 노출 포트. 로컬 8080이 점유된 경우 .env의 API_HOST_PORT로 변경.
+    ports:
+      - '${API_HOST_PORT:-8088}:8080'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    restart: unless-stopped
 
+  # agent-runner (에이전트 팀 담당) — Dockerfile 작성 후 주석 해제
   # agent-runner:
   #   build: ./BE/agent
+  #   container_name: vibeguard-runner
   #   environment:
   #     ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+  #     API_BASE_URL: http://api-server:8080
+  #     RUNNER_CALLBACK_SECRET: ${RUNNER_CALLBACK_SECRET:-dev-secret-change-me}
   #   ports: ['4000:4000']
+  #   # 스캐너·테스트 샌드박스 실행을 위해 Docker 소켓 마운트가 필요할 수 있음(에이전트 팀 결정)
+  #   # volumes: ['/var/run/docker.sock:/var/run/docker.sock']
 
 volumes:
   pgdata:
