@@ -1,8 +1,7 @@
 "use client";
 
-import { ChevronDown, ChevronsUpDown, Plus, Search, X } from "lucide-react";
-import { useEffect, useState } from "react";
-import Image from "next/image";
+import { ChevronDown, ChevronsUpDown, Lock, Plus, Search, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
@@ -17,11 +16,11 @@ interface Repository {
 }
 
 interface GitHubRepo {
-  id: number;
+  githubRepoId: number;
   fullName: string;
   defaultBranch: string;
   language: string | null;
-  private: boolean;
+  isPrivate: boolean;
 }
 
 export default function RepositoriesPage() {
@@ -34,6 +33,10 @@ export default function RepositoriesPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [githubRepos, setGithubRepos] = useState<GitHubRepo[]>([]);
   const [addLoading, setAddLoading] = useState(false);
+  const [addQuery, setAddQuery] = useState("");
+  const [connecting, setConnecting] = useState<number | null>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     apiFetch<Repository[]>("/api/v1/repositories")
@@ -54,25 +57,43 @@ export default function RepositoriesPage() {
 
   function openAdd() {
     setAddOpen(true);
+    setAddQuery("");
     setAddLoading(true);
     apiFetch<GitHubRepo[]>("/api/v1/repositories?source=github")
       .then(setGithubRepos)
       .catch(() => setGithubRepos([]))
-      .finally(() => setAddLoading(false));
+      .finally(() => {
+        setAddLoading(false);
+        setTimeout(() => searchRef.current?.focus(), 50);
+      });
+  }
+
+  function closeAdd() {
+    setAddOpen(false);
+    setAddQuery("");
   }
 
   async function connectRepo(repo: GitHubRepo) {
+    setConnecting(repo.githubRepoId);
     try {
       const added = await apiFetch<Repository>("/api/v1/repositories", {
         method: "POST",
-        body: JSON.stringify({ githubRepoId: repo.id, fullName: repo.fullName, defaultBranch: repo.defaultBranch, language: repo.language }),
+        body: JSON.stringify({ githubRepoId: repo.githubRepoId, fullName: repo.fullName, defaultBranch: repo.defaultBranch, language: repo.language }),
       });
       setRepos((prev) => [added, ...prev]);
-      setAddOpen(false);
+      closeAdd();
     } catch {
-      // 이미 연결된 경우 등
+      // already connected etc.
+    } finally {
+      setConnecting(null);
     }
   }
+
+  const connectedNames = new Set(repos.map((r) => r.fullName));
+
+  const filteredGithubRepos = githubRepos.filter((r) =>
+    r.fullName.toLowerCase().includes(addQuery.trim().toLowerCase())
+  );
 
   return (
     <main className="repositories-page">
@@ -87,21 +108,93 @@ export default function RepositoriesPage() {
         </section>
 
         {addOpen && (
-          <div className="add-repo-modal">
-            <div className="add-repo-content">
-              <h2>GitHub 저장소 연결</h2>
-              {addLoading ? <p>불러오는 중…</p> : (
-                <div className="github-repo-list">
-                  {githubRepos.map((r) => (
-                    <button key={r.id} className="github-repo-row" onClick={() => connectRepo(r)}>
-                      <strong>{r.fullName}</strong>
-                      <span>{r.language ?? "Unknown"}</span>
-                    </button>
-                  ))}
-                  {githubRepos.length === 0 && <p>연결 가능한 저장소가 없습니다.</p>}
+          <div
+            className="add-repo-backdrop"
+            onClick={(e) => { if (e.target === e.currentTarget) closeAdd(); }}
+            onKeyDown={(e) => { if (e.key === "Escape") closeAdd(); }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="GitHub 저장소 연결"
+          >
+            <div className="add-repo-modal" ref={modalRef}>
+              <div className="add-repo-header">
+                <div>
+                  <h2>GitHub 저장소 연결</h2>
+                  <p>연결할 저장소를 선택하면 보안 검증 파이프라인에 추가됩니다.</p>
                 </div>
-              )}
-              <button onClick={() => setAddOpen(false)}>닫기</button>
+                <button className="add-repo-close" onClick={closeAdd} aria-label="닫기">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="add-repo-search">
+                <Search size={15} />
+                <input
+                  ref={searchRef}
+                  placeholder="저장소 이름으로 검색"
+                  value={addQuery}
+                  onChange={(e) => setAddQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Escape") { if (addQuery) setAddQuery(""); else closeAdd(); } }}
+                />
+                {addQuery && (
+                  <button type="button" aria-label="검색어 지우기" onClick={() => setAddQuery("")}>
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+
+              <div className="add-repo-list">
+                {addLoading ? (
+                  <div className="add-repo-loading">
+                    <span className="add-repo-spinner" />
+                    <span>GitHub에서 저장소를 불러오는 중…</span>
+                  </div>
+                ) : filteredGithubRepos.length === 0 ? (
+                  <p className="add-repo-empty">
+                    {addQuery ? `"${addQuery}"와 일치하는 저장소가 없습니다.` : "연결 가능한 저장소가 없습니다."}
+                  </p>
+                ) : (
+                  filteredGithubRepos.map((r) => {
+                    const [owner, name] = r.fullName.split("/");
+                    const already = connectedNames.has(r.fullName);
+                    return (
+                      <div key={r.githubRepoId} className={`add-repo-row${already ? " already" : ""}`}>
+                        <div className="add-repo-avatar" aria-hidden="true">
+                          {(owner?.[0] ?? "?").toUpperCase()}
+                        </div>
+                        <div className="add-repo-info">
+                          <div className="add-repo-name">
+                            <span className="add-repo-owner">{owner}/</span>
+                            <strong>{name}</strong>
+                            {r.isPrivate && (
+                              <span className="add-repo-badge private"><Lock size={9} />Private</span>
+                            )}
+                          </div>
+                          {r.language && (
+                            <span className="add-repo-lang">{r.language}</span>
+                          )}
+                        </div>
+                        {already ? (
+                          <span className="add-repo-connected">연결됨</span>
+                        ) : (
+                          <button
+                            className="add-repo-btn"
+                            onClick={() => connectRepo(r)}
+                            disabled={connecting === r.githubRepoId}
+                          >
+                            {connecting === r.githubRepoId ? "연결 중…" : "연결"}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="add-repo-footer">
+                <span>{filteredGithubRepos.length}개 저장소</span>
+                <button className="add-repo-cancel" onClick={closeAdd}>닫기</button>
+              </div>
             </div>
           </div>
         )}
