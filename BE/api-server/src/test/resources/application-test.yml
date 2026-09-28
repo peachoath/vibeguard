@@ -1,0 +1,30 @@
+# 테스트 프로파일 설정.
+# DB(datasource)는 Testcontainers @ServiceConnection이 자동 주입하므로 두지 않는다.
+# 여기서는 컨텍스트 로드에 필요한 최소값(GitHub OAuth 더미 등)만 채운다.
+spring:
+  jpa:
+    hibernate:
+      # 실제 컨테이너에 Flyway(V1~)가 적용된 뒤 JPA 매핑을 검증한다.
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            client-id: test-client-id
+            client-secret: test-client-secret
+            scope: read:user,user:email
+
+vibeguard:
+  security:
+    # base64(32바이트) — 테스트용 AES-256 키
+    token-key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+  cors:
+    allowed-origins: http://localhost:5173
+  runner:
+    base-url: http://localhost:4000
+    callback-secret: test-callback-secret

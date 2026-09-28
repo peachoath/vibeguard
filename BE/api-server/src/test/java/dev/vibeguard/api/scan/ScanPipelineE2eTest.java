@@ -61,6 +61,7 @@ import org.springframework.web.context.WebApplicationContext;
  * RunnerClient는 @MockitoBean으로 교체해 실제 Node 런너 없이 실행한다.
  */
 @SpringBootTest(webEnvironment = WebEnvironment.MOCK)
+@org.springframework.test.context.ActiveProfiles("test")
 @Import(TestcontainersConfiguration.class)
 class ScanPipelineE2eTest {
 
