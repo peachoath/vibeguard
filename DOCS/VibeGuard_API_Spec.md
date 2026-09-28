@@ -22,8 +22,8 @@
 
 | 티어 | 배포 | 오리진(예) |
 |---|---|---|
-| **FE** | **Vercel** | `https://vibeguard.vercel.app` (+ 프리뷰 `*.vercel.app`) |
-| **API Server** | 단일 VM (Docker Compose) | `https://api.vibeguard.dev` |
+| **FE** | **Vercel** | `https://vibeguard-mu.vercel.app` (+ 프리뷰 `*.vercel.app`) |
+| **API Server** | **AWS EC2** (Docker Compose + Caddy TLS) | `https://<백엔드 도메인>` (Caddy가 Let's Encrypt 자동 TLS) |
 | **DB** | **Supabase 관리형 PostgreSQL 16** | Supavisor 세션 풀러(5432) + `sslmode=require` |
 
 - 개발 환경에선 Vite가 `/api` → `http://localhost:8080`로 프록시하므로 CORS가 필요 없다.
@@ -33,7 +33,7 @@
   - 세션 쿠키: 크로스 사이트 전송을 위해 **`SameSite=None; Secure`** 필요(운영). Lax는 동일 사이트 배포일 때만.
 - 프리플라이트(`OPTIONS`) 허용 메서드: `GET, POST, PATCH, DELETE, OPTIONS`.
 
-> 주의: 크로스 오리진 쿠키 인증은 `SameSite=None; Secure`가 강제되므로 HTTPS 필수. Vercel↔API 도메인 구성 확정 시 CORS 화이트리스트를 환경변수로 관리한다.
+> 주의: 크로스 오리진 쿠키 인증은 `SameSite=None; Secure`가 강제되므로 HTTPS 필수. FE 오리진은 `https://vibeguard-mu.vercel.app`이며, 백엔드는 EC2 앞단 **Caddy 리버스 프록시가 Let's Encrypt로 자동 TLS**를 처리한다(도메인 필요). CORS 화이트리스트는 `CORS_ALLOWED_ORIGINS` 환경변수로 관리한다.
 
 ### 1.2 인증 흐름
 

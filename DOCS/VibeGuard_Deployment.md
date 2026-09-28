@@ -5,15 +5,19 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v1.2 · 2026-09-28 (샌드박스 이미지 선빌드 자동화, agent-runner 활성 반영, ANTHROPIC_API_KEY·DOCKER_GID) |
+| 문서 버전 | v1.3 · 2026-09-28 (배포 대상을 AWS EC2로 변경) |
 | 대상 | `BE/api-server` (Spring Boot 4 / Java 21) + PostgreSQL |
-| **배포 인프라(확정)** | **Oracle Cloud Always Free VM** (영구 무료) + FE는 Vercel · DB는 Supabase |
+| **배포 인프라(확정)** | **AWS EC2** + FE는 Vercel · DB는 Supabase |
 | 관련 문서 | [PRD](./VibeGuard_PRD.md) · [Architecture](./VibeGuard_Architecture.md) · [Team Roles](./VibeGuard_Team_Roles.md) |
 
-> **배포 대상 확정.** 무료 조건과 Docker(샌드박스 컨테이너 3종) 완전 지원을 모두 만족하는
-> **Oracle Cloud Always Free VM**을 배포 대상으로 확정한다. ARM Ampere(최대 4 OCPU/24GB)를
-> 영구 무료로 제공해 스캐너·테스트 컨테이너를 돌리기에 충분하다. FE는 Vercel, DB는 Supabase로
-> 분리한다. 실배포 작업은 방향 전환(v2) 코드 반영이 안정화된 뒤 진행한다(순서상 코드 우선).
+> **배포 대상 확정 — AWS EC2.** api-server + agent-runner + 샌드박스 컨테이너 3종을 단일 EC2
+> 인스턴스에서 Docker Compose로 구동한다. FE는 Vercel, DB는 Supabase로 분리한다.
+> 실배포 작업은 방향 전환(v2) 코드 반영이 안정화된 뒤 진행한다(순서상 코드 우선).
+>
+> **인스턴스 선택(비용).** 프리티어는 `t2.micro`/`t3.micro`(1GB RAM, 12개월 무료)이지만, 스캐너·
+> 테스트 컨테이너를 돌리기에 **1GB는 빠듯**하다. 데모 안정성을 위해 **`t3.small`(2GB) 이상**을
+> 권장하며, 이 경우 소액 과금이 발생한다. 메모리 부족 시 스왑 2~4GB를 잡아 프리티어로도
+> 리허설은 가능하지만, 시연 당일에는 여유 있는 인스턴스를 권장한다.
 
 ---
 
@@ -38,12 +42,15 @@
 
 ## 2. 사전 요구사항
 
-- **배포 VM: Oracle Cloud Always Free (확정)** — ARM Ampere 인스턴스(영구 무료). VM에 **Docker + Docker Compose** 설치 (Docker Engine 24+ 권장).
+- **배포 VM: AWS EC2 (확정)** — `t3.small`(2GB) 이상 권장, Ubuntu 22.04/24.04 LTS. VM에 **Docker + Docker Compose** 설치 (Docker Engine 24+ 권장).
+  - 프리티어(`t2.micro`/`t3.micro`, 1GB)로도 리허설은 가능하나 스왑 2~4GB 권장(§2 상단 비용 노트 참고).
   - 대안(리허설/오프라인용): 팀원 머신에서도 동일 Compose로 구동 가능.
 - GitHub OAuth App 1개 (Client ID/Secret) — 로그인용
+- (권장) 탄력적 IP(Elastic IP) 1개 — 재부팅 시 IP가 바뀌지 않게 고정하면 OAuth 콜백 URL이 유지된다.
 
-> Oracle Cloud VM은 ARM(aarch64)이다. 이미지 빌드/실행 시 아키텍처에 유의하고, 회귀 테스트 컨테이너는
-> 재현성을 위해 `--platform linux/amd64`로 고정한다(PRD §15 R2). 방화벽·보안그룹 인바운드 개방은 §3.6 참고.
+> EC2 표준 인스턴스는 x86_64(amd64)다. 샌드박스/회귀 테스트 컨테이너는 재현성을 위해
+> `--platform linux/amd64`로 고정한다(PRD §15 R2) — EC2에서는 네이티브 아키텍처와도 일치한다.
+> (Apple Silicon 등 ARM 로컬에서 빌드해도 동일 태그로 재현.) 보안그룹 인바운드 개방은 §3.6 참고.
 
 **Ubuntu VM에 Docker 설치 (없다면):**
 ```bash
@@ -107,22 +114,43 @@ docker compose down -v       # DB 볼륨까지 삭제 (초기화)
 ### 3.6 VM 배포 시 추가 확인 (실배포에서 가장 흔한 실패 지점)
 
 **(a) 방화벽 / 클라우드 보안그룹 인바운드 개방**
-클라우드 VM은 기본적으로 외부 포트가 막혀 있어, 포트를 열지 않으면 브라우저·FE에서 접속되지 않는다.
+EC2는 기본적으로 외부 포트가 막혀 있어, 포트를 열지 않으면 브라우저·FE에서 접속되지 않는다.
+- **AWS EC2 (기본)**: 인스턴스의 **Security Group → Inbound rules**에 규칙 추가.
+  - 22/TCP(SSH, 내 IP로 제한 권장), 443/TCP(HTTPS 리버스 프록시), 필요 시 8088/TCP(api-server 직접 접근·디버깅용).
+  - 소스는 가능한 한 좁게(내 IP/CIDR). 데모 공개가 필요하면 443만 0.0.0.0/0으로 연다.
 ```bash
-# Ubuntu ufw 예시 (api-server 호스트 포트 8088)
+# (선택) OS 방화벽도 쓰면 ufw 예시 — 보통 EC2는 Security Group만으로 충분
 sudo ufw allow 8088/tcp
 ```
-- **Oracle Cloud**: VCN → Security List(또는 NSG)에 Ingress 규칙으로 해당 포트(TCP) 추가.
-- **AWS**: EC2 Security Group Inbound에 포트 추가.
 - postgres 포트(5433)는 **외부에 열지 않는다**(DB는 컨테이너 내부 통신만). Supabase를 쓰면 로컬 postgres 자체가 불필요.
 
 **(b) GitHub OAuth App 콜백 URL**
-VM 배포 시 콜백이 로컬이 아니라 VM 도메인/IP여야 한다. GitHub OAuth App 설정에서:
-- Authorization callback URL: `https://<도메인 또는 VM_IP>/login/oauth2/code/github`
-- `.env`의 `CORS_ALLOWED_ORIGINS`·`POST_LOGIN_URI`도 FE(Vercel) 실제 도메인으로 지정.
+EC2 배포 시 콜백이 로컬이 아니라 백엔드 공개 도메인이어야 한다. GitHub OAuth App 설정에서:
+- Authorization callback URL: `https://<백엔드 도메인>/login/oauth2/code/github`
+- `.env`의 `CORS_ALLOWED_ORIGINS`·`POST_LOGIN_URI`는 **FE(Vercel) 오리진 `https://vibeguard-mu.vercel.app`** 으로 지정.
 
-**(c) HTTPS (크로스 오리진 세션 쿠키)**
-FE가 Vercel(크로스 오리진)이면 세션 쿠키가 `SameSite=None; Secure`여야 하므로 **api-server 앞단에 HTTPS가 필수**다. VM 앞에 Nginx/Caddy 리버스 프록시로 TLS 종단을 두고 8088로 프록시한다. (데모를 동일 오리진으로 하면 생략 가능.)
+**(c) HTTPS — Caddy 리버스 프록시 + 도메인 (확정)**
+FE가 Vercel(크로스 오리진)이면 세션 쿠키가 `SameSite=None; Secure`여야 하므로 **api-server 앞단에 HTTPS가 필수**다. **Caddy**를 리버스 프록시로 두면 Let's Encrypt로 **자동 TLS**가 발급·갱신된다.
+
+> **도메인이 필요하다.** Let's Encrypt는 공인 도메인에만 인증서를 발급하며 **EC2의 IP(또는 `*.amazonaws.com` 기본 DNS)로는 발급되지 않는다.** 백엔드용 도메인(예: `api.example.com`)을 하나 준비해 EC2의 Elastic IP로 A 레코드를 연결한다. (무료 도메인: DuckDNS 등 사용 가능.)
+
+EC2에서 Caddy 실행 (예: Docker):
+```bash
+# Caddyfile — 백엔드 도메인을 api-server(호스트 8088)로 프록시, TLS 자동
+cat > Caddyfile <<'EOF'
+api.example.com {
+    reverse_proxy localhost:8088
+}
+EOF
+
+docker run -d --name caddy --network host \
+  -v "$PWD/Caddyfile:/etc/caddy/Caddyfile" \
+  -v caddy_data:/data -v caddy_config:/config \
+  caddy:2
+```
+- Security Group Inbound에 **443/TCP(및 80/TCP — Let's Encrypt HTTP-01 챌린지용)** 를 연다.
+- 발급 후 FE는 `VITE_API_BASE_URL=https://api.example.com`으로 백엔드를 호출한다.
+- 데모를 동일 오리진으로 하면 생략 가능하나, FE가 Vercel이므로 이번 구성에서는 **필수**다.
 
 ---
 
@@ -146,8 +174,8 @@ FE가 Vercel(크로스 오리진)이면 세션 쿠키가 `SameSite=None; Secure`
 | `POSTGRES_DB/USER/PASSWORD` | vibeguard | 컨테이너 postgres 초기화값 |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | changeme | GitHub OAuth (필수) |
 | `TOKEN_ENC_KEY` | dev 기본값 | 토큰 암호화 키(운영 필수 교체) |
-| `CORS_ALLOWED_ORIGINS` | localhost:5173 | FE 배포 도메인 |
-| `POST_LOGIN_URI` | localhost:5173/dashboard | 로그인 후 리다이렉트 |
+| `CORS_ALLOWED_ORIGINS` | localhost:5173 | FE 배포 도메인 — 운영값 `https://vibeguard-mu.vercel.app` |
+| `POST_LOGIN_URI` | localhost:5173/dashboard | 로그인 후 리다이렉트 — 운영값 `https://vibeguard-mu.vercel.app/dashboard` |
 | `RUNNER_BASE_URL` / `RUNNER_CALLBACK_SECRET` | agent-runner:4000 / dev-secret | 런너 HMAC 연동 (api-server·agent 동일) |
 | `ANTHROPIC_API_KEY` | (없음) | Claude Agent SDK. 없으면 런너 골격 모드(실제 분석 없음) |
 | `DOCKER_GID` | 999 | agent-runner가 호스트 Docker 소켓에 접근하기 위한 그룹 GID. 호스트와 불일치 시 소켓 EACCES. 설정: `echo "DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)" >> .env` |
@@ -188,7 +216,7 @@ docker build --platform linux/amd64 -t vibeguard-scan:0.1 \
 ```
 - `vibeguard-sandbox:0.1`: `python:3.10-slim` + `pytest==9.1.1` + 비특권 사용자(uid/gid 1000). 설치·테스트 컨테이너의 베이스.
 - `vibeguard-scan:0.1`: 위 이미지 + `aquasec/trivy:0.74.0` 바이너리. 스캔 컨테이너.
-- **`--platform linux/amd64` 고정**: ARM(Oracle Cloud/Apple Silicon)에서 빌드해도 실행 시점과 아키텍처를 일치시켜 재현성 확보(PRD §15 R2). Trivy DB는 이미지에 굽지 않고 호스트 캐시를 마운트한다.
+- **`--platform linux/amd64` 고정**: EC2 표준 인스턴스(x86_64)와 일치하며, ARM 로컬(Apple Silicon 등)에서 빌드해도 실행 아키텍처를 통일해 재현성 확보(PRD §15 R2). Trivy DB는 이미지에 굽지 않고 호스트 캐시를 마운트한다.
 - **이 단계가 빠지면** 스캔 파이프라인이 이미지 없음으로 실패한다.
 
 ---

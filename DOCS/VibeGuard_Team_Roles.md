@@ -7,7 +7,7 @@
 |---|---|
 | 문서 버전 | v1.0 · 2026-09-10 |
 | 관련 문서 | [방향전환](./VibeGuard_방향전환.md) · [PRD](./VibeGuard_PRD.md) · [Architecture](./VibeGuard_Architecture.md) · [AI Learn First](./VibeGuard_AI_Learn_First.md) |
-| 전제 | 전체 기간 **2주(14일)**, 데모는 단일 VM + Docker Compose(무료), FE는 Vercel·DB는 Supabase |
+| 전제 | 전체 기간 **2주(14일)**, 데모는 **AWS EC2** 단일 인스턴스 + Docker Compose, FE는 Vercel·DB는 Supabase |
 
 ---
 
