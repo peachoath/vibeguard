@@ -107,6 +107,9 @@ docker compose down -v       # DB 볼륨까지 삭제 (초기화)
 - SpringDoc(`/v3/api-docs`, `/swagger-ui.html`) 비활성화
 - actuator 노출을 `health,info`로 축소, `health` 상세 정보 숨김
 - 로깅 INFO / SQL WARN
+- **DB 커넥션 풀(HikariCP)**: Supabase 세션 풀러 대비 작은 풀(`DB_POOL_MAX` 기본 5, `DB_POOL_MIN` 1), `max-lifetime` 30분. 무료 티어 커넥션 상한을 넘지 않게 조정 가능.
+
+> 검증(2026-09-28): 로컬 postgres에 `SPRING_PROFILES_ACTIVE=prod`로 기동 → 부팅 성공, `/actuator/health` UP, `/swagger-ui.html` 비노출(401) 확인. Supabase로 바꾸려면 `.env`의 `DB_URL`만 세션 풀러(5432)+`?sslmode=require` 값으로 교체하면 된다.
 
 > HTTPS·도메인·리버스 프록시(Nginx 등)는 VM 앞단에서 처리한다. FE가 크로스 오리진(Vercel)이면 세션 쿠키가 `SameSite=None; Secure`여야 하므로 **HTTPS가 필수**다.
 
