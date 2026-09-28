@@ -5,35 +5,11 @@ import Image from "next/image";
 import { Sk } from "../components/skeleton";
 import { ErrorView } from "../components/error-view";
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
-import { apiFetch } from "@/lib/api";
-
-interface FindingDto {
-  id: string;
-  type: string;
-  ruleId: string | null;
-  cveId: string | null;
-  cweId: string | null;
-  severity: string;
-  cvssScore: number | null;
-  filePath: string | null;
-  lineStart: number | null;
-  lineEnd: number | null;
-  manifestPath: string | null;
-  packageName: string | null;
-  currentVersion: string | null;
-  recommendedVersion: string | null;
-  verdict: string;
-  status: string;
-}
-
-interface PageResponse {
-  content: FindingDto[];
-  totalElements: number;
-}
+import { useScanFindings } from "@/lib/queries";
 
 const SEVERITY_LABELS: Record<string, string> = {
   CRITICAL: "치명적",
@@ -52,23 +28,15 @@ function ResultsContent() {
   const params = useSearchParams();
   const scanId = params.get("scanId");
 
-  const [data, setData] = useState<PageResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
   const [severity, setSeverity] = useState("all");
   const [verdict, setVerdict] = useState("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("score-desc");
 
-  useEffect(() => {
-    if (!scanId) { setLoading(false); return; }
-    apiFetch<PageResponse>(`/api/v1/scans/${scanId}/findings?size=100`)
-      .then(setData)
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
-  }, [scanId]);
-
-  const findings = data?.content ?? [];
+  const findingsQuery = useScanFindings(scanId);
+  const loading = !!scanId && findingsQuery.isPending;
+  const error = findingsQuery.isError;
+  const findings = useMemo(() => findingsQuery.data?.content ?? [], [findingsQuery.data]);
 
   const counts = useMemo(() => ({
     CRITICAL: findings.filter((f) => f.severity === "CRITICAL").length,
@@ -173,7 +141,7 @@ function ResultsContent() {
                 </div>
               </div>
 
-              {error && !loading && <ErrorView onRetry={() => { setError(false); setLoading(true); if (scanId) apiFetch<PageResponse>(`/api/v1/scans/${scanId}/findings?size=100`).then(setData).catch(() => setError(true)).finally(() => setLoading(false)); }} />}
+              {error && !loading && <ErrorView onRetry={() => findingsQuery.refetch()} />}
               {!scanId && !loading && <p className="findings-empty">스캔을 먼저 선택하세요. <Link href="/history">검사 이력 보기</Link></p>}
 
               <div className="findings-table-wrap">

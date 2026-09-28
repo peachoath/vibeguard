@@ -1,7 +1,7 @@
 'use client'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 
 function Toaster() {
   const [toasts, setToasts] = useState<Array<{ id: number; kind: 'success' | 'error' | 'info' | 'warn'; message: string }>>([])
@@ -59,17 +59,10 @@ function getQueryClient() {
 }
 
 export function Providers({ children }: { children: ReactNode }) {
-  const qc = useRef(getQueryClient())
-
-  useEffect(() => {
-    if (process.env.NEXT_PUBLIC_ENABLE_MOCKS !== 'true') return
-    import('@/mocks/browser').then(({ worker }) => {
-      worker.start({ onUnhandledRequest: 'bypass' })
-    })
-  }, [])
+  const [qc] = useState(getQueryClient)
 
   return (
-    <QueryClientProvider client={qc.current}>
+    <QueryClientProvider client={qc}>
       {children}
       <Toaster />
     </QueryClientProvider>

@@ -2,35 +2,12 @@
 
 import { ArrowUp, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Sk } from "../components/skeleton";
 import { ErrorView } from "../components/error-view";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
-import { apiFetch } from "@/lib/api";
-
-interface SummaryDto {
-  severityDistribution: Record<string, number>;
-  patchSuccessRate: number;
-  avgDurationMs: number | null;
-  totalScans: number;
-  totalPrs: number;
-}
-
-interface ScanDto {
-  id: string;
-  repositoryId: string;
-  ref: string;
-  status: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-  durationMs: number | null;
-}
-
-interface Repository {
-  id: string;
-  fullName: string;
-}
+import { useDashboardSummary, useRepositories, useScans, type ScanDto } from "@/lib/queries";
 
 function formatDuration(ms: number | null): string {
   if (!ms) return "-";
@@ -68,53 +45,28 @@ function statusLabel(status: string): string {
 }
 
 export default function DashboardPage() {
-  const [summary, setSummary] = useState<SummaryDto | null>(null);
-  const [recentScans, setRecentScans] = useState<ScanDto[]>([]);
-  const [repoMap, setRepoMap] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [regressionRate, setRegressionRate] = useState(0);
+  const summaryQuery = useDashboardSummary();
+  const scansQuery = useScans({ poll: true });
+  const reposQuery = useRepositories();
   const [rateMenuOpen, setRateMenuOpen] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const summary = summaryQuery.data ?? null;
+  const loading = summaryQuery.isPending || scansQuery.isPending || reposQuery.isPending;
+  const error = summaryQuery.isError || scansQuery.isError || reposQuery.isError;
+
+  const allScans = useMemo(() => scansQuery.data ?? [], [scansQuery.data]);
+  const recentScans = useMemo(() => allScans.slice(0, 5), [allScans]);
+  const regressionRate = useMemo(() => regressionPassRate(allScans), [allScans]);
+  const repoMap = useMemo(
+    () => Object.fromEntries((reposQuery.data ?? []).map((r) => [r.id, r.fullName])),
+    [reposQuery.data],
+  );
 
   function load() {
-    setLoading(true);
-    setError(false);
-    Promise.all([
-      apiFetch<SummaryDto>("/api/v1/dashboard/summary"),
-      apiFetch<ScanDto[]>("/api/v1/scans"),
-      apiFetch<Repository[]>("/api/v1/repositories"),
-    ])
-      .then(([sum, scans, repos]) => {
-        setSummary(sum);
-        setRecentScans(scans.slice(0, 5));
-        setRegressionRate(regressionPassRate(scans));
-        setRepoMap(Object.fromEntries(repos.map((r) => [r.id, r.fullName])));
-      })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
+    summaryQuery.refetch();
+    scansQuery.refetch();
+    reposQuery.refetch();
   }
-
-  useEffect(() => { load(); }, []);
-
-  /* Poll every 5 s while any scan is live */
-  useEffect(() => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    const hasLive = recentScans.some((s) => s.status === "QUEUED" || s.status === "RUNNING");
-    if (!hasLive) return;
-    pollRef.current = setInterval(async () => {
-      try {
-        const [scans, repos] = await Promise.all([
-          apiFetch<ScanDto[]>("/api/v1/scans"),
-          apiFetch<Repository[]>("/api/v1/repositories"),
-        ]);
-        setRecentScans(scans.slice(0, 5));
-        setRegressionRate(regressionPassRate(scans));
-        setRepoMap(Object.fromEntries(repos.map((r) => [r.id, r.fullName])));
-      } catch {}
-    }, 5000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [recentScans]);
 
   const dist = summary?.severityDistribution ?? {};
   const totalFindings = Object.values(dist).reduce((a, b) => a + b, 0);

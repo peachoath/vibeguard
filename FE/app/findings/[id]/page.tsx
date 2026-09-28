@@ -1,35 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import AppHeader from "../../components/app-header";
 import ScreenContent from "../../components/screen-content";
-import { apiFetch } from "@/lib/api";
 import { Sk } from "../../components/skeleton";
 import { ErrorView } from "../../components/error-view";
-
-interface FindingDetailDto {
-  id: string;
-  type: string;
-  ruleId: string | null;
-  cveId: string | null;
-  cweId: string | null;
-  severity: string;
-  cvssScore: number | null;
-  filePath: string | null;
-  lineStart: number | null;
-  lineEnd: number | null;
-  manifestPath: string | null;
-  packageName: string | null;
-  currentVersion: string | null;
-  recommendedVersion: string | null;
-  verdict: string;
-  status: string;
-  description: string | null;
-  remediationAdvice: string | null;
-  references: string[] | null;
-}
+import { useFinding } from "@/lib/queries";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
@@ -43,21 +20,10 @@ const VERDICT_LABELS: Record<string, string> = {
 export default function FindingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [finding, setFinding] = useState<FindingDetailDto | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  function load() {
-    if (!id) return;
-    setLoading(true);
-    setError(false);
-    apiFetch<FindingDetailDto>(`/api/v1/findings/${id}`)
-      .then(setFinding)
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(() => { load(); }, [id]);
+  const findingQuery = useFinding(id);
+  const finding = findingQuery.data ?? null;
+  const loading = findingQuery.isPending;
+  const error = findingQuery.isError;
 
   return (
     <main className="results-page">
@@ -94,7 +60,7 @@ export default function FindingDetailPage() {
           </div>
         )}
 
-        {error && !loading && <ErrorView onRetry={load} />}
+        {error && !loading && <ErrorView onRetry={() => findingQuery.refetch()} />}
 
         {finding && !loading && (
           <div className="finding-detail-card">

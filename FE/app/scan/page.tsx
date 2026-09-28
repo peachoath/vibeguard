@@ -3,17 +3,11 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
 import { apiFetch, apiSseUrl, ApiError } from "@/lib/api";
-
-interface ScanDto {
-  id: string;
-  repositoryId: string;
-  ref: string;
-  status: string;
-}
+import { useStartScan, type ScanDto } from "@/lib/queries";
 
 interface SseStageEvent {
   scanId: string;
@@ -30,11 +24,6 @@ interface SseLogEvent {
   payload: { level: string; message: string; ts: string };
 }
 
-interface SseDoneEvent {
-  scanId: string;
-  kind: "done";
-  status?: string;
-}
 
 const STAGE_ORDER = ["CLONING", "SCANNING", "VERIFYING", "REGRESSION_CHECK", "PR_CREATING"];
 const STAGE_LABELS: Record<string, string> = {
@@ -47,7 +36,6 @@ const STAGE_LABELS: Record<string, string> = {
 
 function ScanContent() {
   const params = useSearchParams();
-  const router = useRouter();
   const repoId = params.get("repoId");
   const ref = params.get("ref") ?? "main";
 
@@ -56,19 +44,52 @@ function ScanContent() {
   const [stageStatus, setStageStatus] = useState<Record<string, string>>({});
   const [logs, setLogs] = useState<{ ts: string; agent: number; level: string; message: string }[]>([]);
   const [done, setDone] = useState(false);
-  const [finalStatus, setFinalStatus] = useState("");
   const [error, setError] = useState("");
   const [reconnecting, setReconnecting] = useState(false);
   const esRef = useRef<EventSource | null>(null);
   const activityListRef = useRef<HTMLDivElement>(null);
+  const startScan = useStartScan();
+
+  const subscribeStream = (scanId: string) => {
+    // SseHub.broadcast()는 named events(event: stage, event: log, event: done)를 전송한다.
+    // EventSource.onmessage는 unnamed events(event 헤더 없음)에만 반응하므로
+    // 반드시 addEventListener로 각 이벤트를 수신해야 한다.
+    const es = new EventSource(apiSseUrl(`/api/v1/scans/${scanId}/stream`), { withCredentials: true });
+    esRef.current = es;
+
+    es.addEventListener("stage", (e: MessageEvent) => {
+      const evt: SseStageEvent = JSON.parse(e.data);
+      if (evt.stage) {
+        setCurrentStage(evt.stage);
+        setStageStatus((prev) => ({ ...prev, [evt.stage]: evt.status ?? "RUNNING" }));
+      }
+    });
+
+    es.addEventListener("log", (e: MessageEvent) => {
+      const evt: SseLogEvent = JSON.parse(e.data);
+      if (evt.payload) {
+        setLogs((prev) => [
+          ...prev.slice(-100),
+          { ts: evt.payload.ts, agent: evt.agent ?? 0, level: evt.payload.level, message: evt.payload.message },
+        ]);
+      }
+    });
+
+    es.addEventListener("done", () => {
+      setDone(true);
+      es.close();
+    });
+
+    es.onerror = () => {
+      // 연결 오류 시 닫기. 재연결은 브라우저 기본 동작에 맡기지 않고 명시적으로 차단.
+      es.close();
+    };
+  };
 
   useEffect(() => {
-    if (!repoId) { setError("저장소 정보가 없습니다."); return; }
+    if (!repoId) return;
 
-    apiFetch<ScanDto>("/api/v1/scans", {
-      method: "POST",
-      body: JSON.stringify({ repositoryId: repoId, ref }),
-    })
+    startScan.mutateAsync({ repositoryId: repoId, ref })
       .then((s) => {
         setScan(s);
         subscribeStream(s.id);
@@ -100,44 +121,6 @@ function ScanContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoId, ref]);
 
-  function subscribeStream(scanId: string) {
-    // SseHub.broadcast()는 named events(event: stage, event: log, event: done)를 전송한다.
-    // EventSource.onmessage는 unnamed events(event 헤더 없음)에만 반응하므로
-    // 반드시 addEventListener로 각 이벤트를 수신해야 한다.
-    const es = new EventSource(apiSseUrl(`/api/v1/scans/${scanId}/stream`), { withCredentials: true });
-    esRef.current = es;
-
-    es.addEventListener("stage", (e: MessageEvent) => {
-      const evt: SseStageEvent = JSON.parse(e.data);
-      if (evt.stage) {
-        setCurrentStage(evt.stage);
-        setStageStatus((prev) => ({ ...prev, [evt.stage]: evt.status ?? "RUNNING" }));
-      }
-    });
-
-    es.addEventListener("log", (e: MessageEvent) => {
-      const evt: SseLogEvent = JSON.parse(e.data);
-      if (evt.payload) {
-        setLogs((prev) => [
-          ...prev.slice(-100),
-          { ts: evt.payload.ts, agent: evt.agent ?? 0, level: evt.payload.level, message: evt.payload.message },
-        ]);
-      }
-    });
-
-    es.addEventListener("done", (e: MessageEvent) => {
-      const evt: SseDoneEvent = JSON.parse(e.data);
-      setDone(true);
-      setFinalStatus(evt.status ?? "COMPLETED");
-      es.close();
-    });
-
-    es.onerror = () => {
-      // 연결 오류 시 닫기. 재연결은 브라우저 기본 동작에 맡기지 않고 명시적으로 차단.
-      es.close();
-    };
-  }
-
   const stageIndex = STAGE_ORDER.indexOf(currentStage);
   const progress = done ? 100 : Math.min(95, Math.round(((stageIndex + 1) / STAGE_ORDER.length) * 100));
 
@@ -163,12 +146,13 @@ function ScanContent() {
     );
   }
 
-  if (error) {
+  const shownError = !repoId ? "저장소 정보가 없습니다." : error;
+  if (shownError) {
     return (
       <main className="scan-page">
         <AppHeader active="scan" />
         <ScreenContent>
-          <p className="scan-error">{error}</p>
+          <p className="scan-error">{shownError}</p>
           <Link href="/repositories">저장소로 돌아가기</Link>
         </ScreenContent>
       </main>
