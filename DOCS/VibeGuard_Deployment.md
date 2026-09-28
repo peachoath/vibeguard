@@ -5,9 +5,15 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v1.0 · 2026-09-27 |
+| 문서 버전 | v1.2 · 2026-09-28 (샌드박스 이미지 선빌드 자동화, agent-runner 활성 반영, ANTHROPIC_API_KEY·DOCKER_GID) |
 | 대상 | `BE/api-server` (Spring Boot 4 / Java 21) + PostgreSQL |
+| **배포 인프라(확정)** | **Oracle Cloud Always Free VM** (영구 무료) + FE는 Vercel · DB는 Supabase |
 | 관련 문서 | [PRD](./VibeGuard_PRD.md) · [Architecture](./VibeGuard_Architecture.md) · [Team Roles](./VibeGuard_Team_Roles.md) |
+
+> **배포 대상 확정.** 무료 조건과 Docker(샌드박스 컨테이너 3종) 완전 지원을 모두 만족하는
+> **Oracle Cloud Always Free VM**을 배포 대상으로 확정한다. ARM Ampere(최대 4 OCPU/24GB)를
+> 영구 무료로 제공해 스캐너·테스트 컨테이너를 돌리기에 충분하다. FE는 Vercel, DB는 Supabase로
+> 분리한다. 실배포 작업은 방향 전환(v2) 코드 반영이 안정화된 뒤 진행한다(순서상 코드 우선).
 
 ---
 
@@ -32,9 +38,12 @@
 
 ## 2. 사전 요구사항
 
-- VM에 **Docker + Docker Compose** 설치 (Docker Engine 24+ 권장)
-- (선택) 무료 VM: Oracle Cloud Always Free 등. 데모만이면 팀원 머신도 가능.
+- **배포 VM: Oracle Cloud Always Free (확정)** — ARM Ampere 인스턴스(영구 무료). VM에 **Docker + Docker Compose** 설치 (Docker Engine 24+ 권장).
+  - 대안(리허설/오프라인용): 팀원 머신에서도 동일 Compose로 구동 가능.
 - GitHub OAuth App 1개 (Client ID/Secret) — 로그인용
+
+> Oracle Cloud VM은 ARM(aarch64)이다. 이미지 빌드/실행 시 아키텍처에 유의하고, 회귀 테스트 컨테이너는
+> 재현성을 위해 `--platform linux/amd64`로 고정한다(PRD §15 R2). 방화벽·보안그룹 인바운드 개방은 §3.6 참고.
 
 **Ubuntu VM에 Docker 설치 (없다면):**
 ```bash
@@ -49,7 +58,9 @@ docker --version && docker compose version   # 설치 확인
 
 ## 3. 배포 절차
 
-> **원클릭:** 저장소 루트에서 `bash scripts/deploy.sh` — `.env` 확인 → 빌드·기동 → 헬스 대기까지 자동. `.env`가 없으면 생성만 하고 값 입력을 안내한다. 수동 절차는 아래 3.1~3.6.
+> **원클릭:** 저장소 루트에서 `bash scripts/deploy.sh` — `.env` 확인 → **샌드박스 이미지 빌드** → compose 빌드·기동 → 헬스 대기까지 자동(5단계). `.env`가 없으면 생성만 하고 값 입력을 안내한다. 수동 절차는 아래 3.1~3.6.
+>
+> **샌드박스 이미지 선빌드(중요).** agent-runner는 스캔·설치·테스트 컨테이너를 런타임에 `vibeguard-sandbox:0.1` / `vibeguard-scan:0.1` 태그로 띄운다. compose는 이 이미지들을 빌드하지 않으므로 **반드시 기동 전에 미리 빌드**해야 한다(스크립트가 자동 처리). 이 단계가 빠지면 스캔 파이프라인이 이미지 없음으로 실패한다. 상세는 §7.
 
 ### 3.1 저장소 클론
 ```bash
@@ -68,10 +79,18 @@ cp .env.example .env
 
 ### 3.3 기동
 ```bash
-docker compose up -d --build      # postgres → (healthy) → api-server 순으로 기동
-docker compose ps                 # 둘 다 healthy 확인
+# (1) 샌드박스 이미지 2종 선빌드 — agent-runner가 런타임에 참조. compose는 빌드하지 않음.
+#     scan은 sandbox를 FROM 하므로 순서 고정. 재현성 위해 --platform linux/amd64.
+docker build --platform linux/amd64 -t vibeguard-sandbox:0.1 BE/agent/sandbox/image/
+docker build --platform linux/amd64 -t vibeguard-scan:0.1 \
+    -f BE/agent/sandbox/image/Dockerfile.scan BE/agent/sandbox/image/
+
+# (2) compose 기동
+docker compose up -d --build      # postgres → api-server → agent-runner 순으로 기동
+docker compose ps                 # 모두 healthy 확인
 docker compose logs -f api-server # 부팅 로그
 ```
+> `scripts/deploy.sh`를 쓰면 위 (1)(2)가 자동으로 실행된다. 이미 있는 샌드박스 이미지는 재빌드하지 않는다(`REBUILD_SANDBOX=1`로 강제 재빌드).
 
 ### 3.4 확인
 ```bash
@@ -129,7 +148,9 @@ FE가 Vercel(크로스 오리진)이면 세션 쿠키가 `SameSite=None; Secure`
 | `TOKEN_ENC_KEY` | dev 기본값 | 토큰 암호화 키(운영 필수 교체) |
 | `CORS_ALLOWED_ORIGINS` | localhost:5173 | FE 배포 도메인 |
 | `POST_LOGIN_URI` | localhost:5173/dashboard | 로그인 후 리다이렉트 |
-| `RUNNER_BASE_URL` / `RUNNER_CALLBACK_SECRET` | agent-runner:4000 / dev-secret | 런너 HMAC 연동 |
+| `RUNNER_BASE_URL` / `RUNNER_CALLBACK_SECRET` | agent-runner:4000 / dev-secret | 런너 HMAC 연동 (api-server·agent 동일) |
+| `ANTHROPIC_API_KEY` | (없음) | Claude Agent SDK. 없으면 런너 골격 모드(실제 분석 없음) |
+| `DOCKER_GID` | 999 | agent-runner가 호스트 Docker 소켓에 접근하기 위한 그룹 GID. 호스트와 불일치 시 소켓 EACCES. 설정: `echo "DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)" >> .env` |
 
 ---
 
@@ -147,23 +168,39 @@ FE가 Vercel(크로스 오리진)이면 세션 쿠키가 `SameSite=None; Secure`
 
 ---
 
-## 7. 이미지 빌드 (참고)
+## 7. 이미지 빌드
 
-Compose가 자동 빌드하지만, 단독 빌드도 가능하다.
+### 7.1 Compose가 빌드하는 이미지 (자동)
 ```bash
-docker build -t vibeguard-api:local ./BE/api-server
+docker build -t vibeguard-api:local ./BE/api-server   # 단독 빌드도 가능
 ```
-- 멀티스테이지: `eclipse-temurin:21-jdk`(빌드, `bootJar -x test`) → `21-jre-jammy`(런타임, 비특권 사용자).
+- **api-server**: 멀티스테이지 `eclipse-temurin:21-jdk`(빌드, `bootJar -x test`) → `21-jre-jammy`(런타임, 비특권 사용자).
+- **agent-runner**: `BE/agent/Dockerfile`. compose `up --build`가 자동 빌드.
 - 테스트는 Testcontainers(Docker)가 필요해 이미지 빌드 단계에서 제외한다. 테스트는 CI/로컬에서 `./gradlew build`로 별도 수행.
+
+### 7.2 샌드박스 이미지 2종 (수동 선빌드 — compose가 빌드하지 않음)
+agent-runner가 스캔·설치·테스트 컨테이너를 **런타임에** 아래 태그로 띄운다. compose 서비스가 아니므로 기동 전에 미리 만들어야 한다(스크립트가 자동 처리).
+```bash
+# 순서 고정: scan 이미지는 sandbox 이미지를 FROM 한다.
+docker build --platform linux/amd64 -t vibeguard-sandbox:0.1 BE/agent/sandbox/image/
+docker build --platform linux/amd64 -t vibeguard-scan:0.1 \
+    -f BE/agent/sandbox/image/Dockerfile.scan BE/agent/sandbox/image/
+```
+- `vibeguard-sandbox:0.1`: `python:3.10-slim` + `pytest==9.1.1` + 비특권 사용자(uid/gid 1000). 설치·테스트 컨테이너의 베이스.
+- `vibeguard-scan:0.1`: 위 이미지 + `aquasec/trivy:0.74.0` 바이너리. 스캔 컨테이너.
+- **`--platform linux/amd64` 고정**: ARM(Oracle Cloud/Apple Silicon)에서 빌드해도 실행 시점과 아키텍처를 일치시켜 재현성 확보(PRD §15 R2). Trivy DB는 이미지에 굽지 않고 호스트 캐시를 마운트한다.
+- **이 단계가 빠지면** 스캔 파이프라인이 이미지 없음으로 실패한다.
 
 ---
 
-## 8. agent-runner 통합 (에이전트 팀)
+## 8. agent-runner 통합 (현황: 활성)
 
-`docker-compose.yml`에 agent-runner placeholder가 주석으로 있다. 에이전트 팀이 `BE/agent` Dockerfile을 작성하면 주석을 해제해 통합한다. 이때 고려 사항:
+`docker-compose.yml`에 **agent-runner 서비스가 활성화되어 있다**(과거의 주석 placeholder 아님). 구성:
 - `API_BASE_URL=http://api-server:8080` (내부 네트워크)
-- `RUNNER_CALLBACK_SECRET`은 api-server와 **동일 값** (HMAC)
-- 스캐너·테스트 샌드박스 실행을 위한 Docker 소켓 마운트 여부는 에이전트 팀이 결정
+- `RUNNER_CALLBACK_SECRET`은 api-server와 **동일 값** (HMAC, NFR-S4)
+- `ANTHROPIC_API_KEY`로 Claude Agent SDK 구동(없으면 골격 모드)
+- 샌드박스 컨테이너 3종 실행을 위해 **호스트 Docker 소켓을 마운트**(`/var/run/docker.sock`)하고, `group_add: [${DOCKER_GID}]`로 소켓 접근 권한을 부여한다. 소켓 마운트는 강력한 권한이므로 **데모/신뢰 환경 한정**(NFR-S1).
+- 호스트 docker 소켓 GID가 이미지 기본값(999)과 다르면 `.env`에 `DOCKER_GID`를 지정한다(§5).
 
 ---
 
