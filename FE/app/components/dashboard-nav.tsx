@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { motion, useReducedMotion } from "motion/react";
+import { usePrefetch } from "@/lib/queries";
 
 const tabs = [
   { id: "repositories", label: "저장소", href: "/repositories" },
@@ -16,6 +17,13 @@ type NavTab = typeof tabs[number]["id"] | "scan";
 
 export default function DashboardNav({ active }: { active: NavTab }) {
   const reducedMotion = useReducedMotion();
+  const prefetch = usePrefetch();
+  const prefetchFor = (id: (typeof tabs)[number]["id"]) => {
+    if (id === "repositories") prefetch.repositories();
+    else if (id === "history") prefetch.history();
+    else if (id === "dashboard") prefetch.dashboard();
+    // results는 scanId가 있어야 조회 가능하므로 프리페치 생략
+  };
   return (
     <nav className="dashboard-nav" aria-label="대시보드 메뉴">
       {tabs.map((tab) => {
@@ -27,6 +35,8 @@ export default function DashboardNav({ active }: { active: NavTab }) {
             scroll={false}
             className={`dashboard-tab${isActive ? " active" : ""}`}
             aria-current={isActive ? "page" : undefined}
+            onMouseEnter={() => prefetchFor(tab.id)}
+            onFocus={() => prefetchFor(tab.id)}
           >
             {isActive && (
               <motion.span

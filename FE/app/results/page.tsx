@@ -9,7 +9,7 @@ import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
-import { useScanFindings } from "@/lib/queries";
+import { useScanFindings, usePrefetch } from "@/lib/queries";
 
 const SEVERITY_LABELS: Record<string, string> = {
   CRITICAL: "치명적",
@@ -33,6 +33,7 @@ function ResultsContent() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("score-desc");
 
+  const prefetch = usePrefetch();
   const findingsQuery = useScanFindings(scanId);
   const loading = !!scanId && findingsQuery.isPending;
   const error = findingsQuery.isError;
@@ -185,7 +186,7 @@ function ResultsContent() {
                           </span>
                         </td>
                         <td><span className={`finding-regression ${item.status.toLowerCase()}`}>{item.status}</span></td>
-                        <td><Link className="finding-detail-link" href={`/findings/${item.id}`} scroll={false}>상세 보기 →</Link></td>
+                        <td><Link className="finding-detail-link" href={`/findings/${item.id}`} scroll={false} onMouseEnter={() => prefetch.finding(item.id)} onFocus={() => prefetch.finding(item.id)}>상세 보기 →</Link></td>
                       </tr>
                     ))}
                   </tbody>

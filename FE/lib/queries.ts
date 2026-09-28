@@ -271,3 +271,31 @@ export function useDeleteAccount() {
     mutationFn: () => apiFetch<void>("/api/v1/users/me", { method: "DELETE" }),
   });
 }
+
+// ──────────────────────────────────────────────────────────
+// Hover 프리페치 — 링크에 마우스를 올리면 대상 데이터를 미리 받아 체감 속도를 높인다.
+// prefetchQuery는 staleTime(기본 30s) 내 재호출을 자동 무시하므로 과호출되지 않는다.
+// ──────────────────────────────────────────────────────────
+export function usePrefetch() {
+  const qc = useQueryClient();
+  const repositories = () =>
+    qc.prefetchQuery({ queryKey: qk.repositories, queryFn: () => apiFetch<Repository[]>("/api/v1/repositories") });
+  const scans = () =>
+    qc.prefetchQuery({ queryKey: qk.scans, queryFn: () => apiFetch<ScanDto[]>("/api/v1/scans") });
+  const summary = () =>
+    qc.prefetchQuery({ queryKey: qk.summary, queryFn: () => apiFetch<SummaryDto>("/api/v1/dashboard/summary") });
+  return {
+    repositories,
+    history: () => {
+      scans();
+      repositories();
+    },
+    dashboard: () => {
+      summary();
+      scans();
+      repositories();
+    },
+    finding: (id: string) =>
+      qc.prefetchQuery({ queryKey: qk.finding(id), queryFn: () => apiFetch<FindingDetailDto>(`/api/v1/findings/${id}`) }),
+  };
+}

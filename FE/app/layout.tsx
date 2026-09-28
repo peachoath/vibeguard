@@ -3,6 +3,7 @@ import "./globals.css";
 import PageTransition from "./components/page-transition";
 import { AuthProvider } from "./components/auth-provider";
 import { Providers } from "./components/providers";
+import CommandPalette from "./components/command-palette";
 
 export const metadata: Metadata = {
   title: "VibeGuard",
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <Providers>
           <AuthProvider>
             <PageTransition>{children}</PageTransition>
+            <CommandPalette />
           </AuthProvider>
         </Providers>
       </body>

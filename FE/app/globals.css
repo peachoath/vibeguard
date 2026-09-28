@@ -34,6 +34,21 @@ a { color: inherit; text-decoration: none; }
 }
 
 .login-modal-overlay { position: fixed; z-index: 100; inset: 0; padding: 32px; background: rgba(8, 15, 26, .72); backdrop-filter: blur(2px); display: grid; place-items: center; }
+
+/* 명령 팔레트 (⌘K) */
+.cmdk-overlay { position: fixed; z-index: 200; inset: 0; padding: 12vh 20px 20px; background: rgba(8, 15, 26, .5); backdrop-filter: blur(2px); display: grid; justify-items: center; align-items: start; }
+.cmdk { width: min(560px, 100%); border: 1px solid rgba(216, 224, 234, .9); border-radius: 16px; background: #fff; box-shadow: 0 28px 90px rgba(0, 0, 0, .3); overflow: hidden; animation: login-dialog-in .16s ease-out; }
+.cmdk-search { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid #eef2f7; color: #8a93a3; }
+.cmdk-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 15px; }
+.cmdk-kbd { padding: 2px 7px; border: 1px solid #dfe6ee; border-radius: 6px; background: #f7f9fc; color: #8a93a3; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.cmdk-list { max-height: 320px; overflow-y: auto; margin: 0; padding: 8px; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.cmdk-item { width: 100%; padding: 10px 12px; border: 0; border-radius: 10px; background: transparent; display: flex; align-items: center; gap: 12px; cursor: pointer; text-align: left; color: var(--ink); transition: background .12s ease; }
+.cmdk-item.active { background: #eef4ff; }
+.cmdk-item-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: #f4f7fb; color: #3f7cf0; flex: 0 0 auto; }
+.cmdk-item.active .cmdk-item-icon { background: #dbe8ff; }
+.cmdk-item-label { font-size: 14px; font-weight: 700; }
+.cmdk-item-hint { margin-left: auto; color: #8a93a3; font-size: 12px; }
+.cmdk-empty { padding: 22px; text-align: center; color: #8a93a3; font-size: 13px; }
 .login-modal-open .features,
 .landing-page:has(.login-modal-overlay) .features { display: none !important; }
 .login-dialog { width: min(540px, 100%); padding: 24px 38px 28px; border: 1px solid rgba(216, 224, 234, .9); border-radius: 18px; background: #fff; box-shadow: 0 28px 90px rgba(0, 0, 0, .3); animation: login-dialog-in .2s ease-out; }
@@ -324,6 +339,9 @@ a { color: inherit; text-decoration: none; }
 .dashboard-tab > .dashboard-tab-label { position: absolute; inset: 0; display: grid; place-items: center; -webkit-font-smoothing: antialiased; transition: color 140ms ease; }
 .dashboard-tab.active { color: #fff; }
 .account-area { justify-self: end; display: flex; align-items: center; gap: 12px; }
+.cmdk-trigger { display: inline-flex; align-items: center; gap: 7px; height: 34px; margin-right: 8px; padding: 0 12px; border: 1px solid #e2e8f0; border-radius: 17px; background: #fbfcfe; color: #8a93a3; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+.cmdk-trigger:hover { background: #f2f6fc; border-color: #cdd9e8; }
+.cmdk-trigger kbd { font-size: 11px; font-weight: 700; letter-spacing: .02em; color: #6b7688; }
 .settings-button { width: 41px; height: 41px; margin-right: 8px; border: 1px solid #e2e8f0; border-radius: 50%; background: #fff; display: grid; place-items: center; cursor: pointer; }
 .account-avatar { width: 45px; height: 45px; border-radius: 50%; background: #f0f2f5; display: grid; place-items: center; font-size: 13px; font-weight: 800; }
 .account-copy { display: grid; gap: 3px; }
@@ -424,6 +442,7 @@ a { color: inherit; text-decoration: none; }
   .dashboard-brand img { width: 165px; }
   .dashboard-nav { grid-column: 1 / -1; grid-row: 2; width: 100%; }
   .account-area { grid-column: 2; grid-row: 1; }
+  .cmdk-trigger { display: none; }
   .repositories-heading { height: auto; padding: 32px 0 20px; align-items: flex-end; }
   .repositories-heading p { max-width: 430px; line-height: 1.5; }
   .heading-buttons { padding: 0; }
