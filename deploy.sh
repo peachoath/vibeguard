@@ -27,6 +27,23 @@ SANDBOX_IMAGE="vibeguard-sandbox:0.1"
 SCAN_IMAGE="vibeguard-scan:0.1"
 SANDBOX_DIR="BE/agent/sandbox/image"
 
+# 작업/캐시 공유 디렉토리 (요구사항 7). 호스트·컨테이너 동일 경로(/srv/vibeguard).
+# 러너(uid 1000)가 써야 하므로 도커가 만들기 전에 1000:1000 소유로 미리 생성한다.
+# (도커가 대신 만들면 root 소유가 되어 러너가 EACCES로 못 쓴다.)
+SHARE_ROOT="${VIBEGUARD_SHARE_ROOT:-/srv/vibeguard}"
+RUNNER_UID="${RUNNER_UID:-1000}"
+RUNNER_GID="${RUNNER_GID:-1000}"
+
+prepare_share_dir() {
+  if [ -d "$SHARE_ROOT" ] && [ "$(stat -c '%u' "$SHARE_ROOT" 2>/dev/null || echo -1)" = "$RUNNER_UID" ]; then
+    echo "[deploy] 공유 디렉토리 준비됨: ${SHARE_ROOT} (uid ${RUNNER_UID})"
+    return 0
+  fi
+  echo "[deploy] 공유 디렉토리 생성: ${SHARE_ROOT} (work/cache, 소유 ${RUNNER_UID}:${RUNNER_GID})"
+  sudo mkdir -p "${SHARE_ROOT}/work" "${SHARE_ROOT}/cache"
+  sudo chown -R "${RUNNER_UID}:${RUNNER_GID}" "$SHARE_ROOT"
+}
+
 # 샌드박스 이미지 2종 빌드 (agent-runner가 실행 시점에 참조).
 # compose는 이 이미지를 빌드하지 않으므로 배포 전에 여기서 만든다.
 # scan 이미지는 sandbox 이미지를 FROM 하므로 반드시 sandbox → scan 순서로 빌드한다.
@@ -69,6 +86,9 @@ case "$cmd" in
       echo "[deploy] 경고: 루트 .env가 없습니다. 기본값으로 진행합니다."
       echo "         실제 배포는 'cp .env.example .env' 후 값을 채우세요."
     fi
+    # 작업/캐시 공유 디렉토리를 러너 소유로 먼저 만든다(요구사항 7).
+    # 이 단계가 없으면 러너가 샌드박스에 빈 폴더를 붙여 스캔이 0건으로 나온다.
+    prepare_share_dir
     # agent-runner가 런타임에 참조하는 샌드박스 이미지를 먼저 만든다.
     # 이 단계가 없으면 스캔·설치·테스트 컨테이너 기동이 실패한다.
     build_sandbox_images

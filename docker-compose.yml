@@ -84,6 +84,13 @@ services:
       # 콜백 서명 키 — api-server의 RUNNER_CALLBACK_SECRET과 동일해야 함(NFR-S4).
       RUNNER_CALLBACK_SECRET: ${RUNNER_CALLBACK_SECRET:-dev-secret-change-me}
       RUNNER_PORT: 4000
+      # 작업 폴더·캐시 (요구사항 7 — 호스트와 동일 경로 공유).
+      # 러너가 여는 샌드박스 컨테이너는 호스트 Docker 데몬으로 뜨므로, 마운트 소스 경로는
+      # "호스트 경로" 기준으로 해석된다. 따라서 러너 컨테이너 내부 경로와 호스트 경로가
+      # 반드시 같아야(/srv/vibeguard : /srv/vibeguard) 샌드박스에 실제 리포/캐시가 붙는다.
+      # 경로가 다르면 빈 폴더가 마운트되어 스캔이 0건으로 나온다.
+      VIBEGUARD_WORK_DIR: ${VIBEGUARD_WORK_DIR:-/srv/vibeguard/work}
+      VIBEGUARD_CACHE_DIR: ${VIBEGUARD_CACHE_DIR:-/srv/vibeguard/cache}
     # 호스트 노출 포트. 로컬 4000이 점유된 경우 .env의 RUNNER_HOST_PORT로 변경.
     ports:
       - '${RUNNER_HOST_PORT:-4000}:4000'
@@ -91,6 +98,10 @@ services:
     # 주의: 소켓 마운트는 강력한 권한이므로 데모/신뢰 환경에서만 사용(NFR-S1).
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # 작업/캐시 공유 — 왼쪽(호스트)·오른쪽(컨테이너) 경로가 반드시 같아야 한다(요구사항 7).
+      # deploy.sh가 이 디렉토리를 uid 1000 소유로 미리 생성한다(도커가 만들면 root 소유라
+      # 러너 uid 1000이 쓰지 못함).
+      - /srv/vibeguard:/srv/vibeguard
     # 호스트 docker 그룹 GID를 런타임에 부여해 소켓 접근 EACCES 방지.
     # 이미지 기본값은 999. 호스트가 다르면 .env에 DOCKER_GID 지정:
     #   echo "DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)" >> .env
