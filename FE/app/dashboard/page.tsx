@@ -2,7 +2,7 @@
 
 import { ArrowUp, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { type CSSProperties, useMemo, useState } from "react";
 import { Sk } from "../components/skeleton";
 import { ErrorView } from "../components/error-view";
 import AppHeader from "../components/app-header";
@@ -148,7 +148,7 @@ export default function DashboardPage() {
                 <div className="security-card-heading">
                   <div><h2>패치 성공률</h2><p>패치 후 기존 테스트 전체 통과 비율</p></div>
                 </div>
-                <div className="gauge">
+                <div className="gauge" style={{ "--gauge-deg": `${Math.round(patchRate * 1.8)}deg` } as CSSProperties}>
                   <div><strong>{patchRate}%</strong><span>패치 성공률</span></div>
                 </div>
                 <div className="gauge-summary">
@@ -171,7 +171,7 @@ export default function DashboardPage() {
                     <button type="button" onClick={() => { exportSummary(); setRateMenuOpen(false); }}>요약 내보내기</button>
                   </div>
                 )}
-                <div className="gauge">
+                <div className="gauge" style={{ "--gauge-deg": `${Math.round(regressionRate * 1.8)}deg` } as CSSProperties}>
                   <div><strong>{regressionRate}%</strong><span>회귀 통과율</span></div>
                 </div>
                 <div className="gauge-summary">
