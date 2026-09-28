@@ -8,11 +8,13 @@ runner.py의 검사 9종과 실제 install/run_tests 실행으로 확인한다. 
     ./.venv/bin/python test_cli.py
 """
 
+import contextlib
+import io
 import json
 import os
 import tempfile
 
-from cli import _counts, _findings, _outcome
+from cli import _cache_dir, _counts, _findings, _outcome
 from runner import TIMEOUT_EXIT_CODE, RunResult
 
 
@@ -108,8 +110,39 @@ def test_findings():
         assert _findings(write("list.json", "[]")) is None
 
 
+def test_cache_dir():
+    """캐시 위치는 환경변수를 따르고, 상대 경로는 거절한다."""
+    saved = os.environ.pop("VIBEGUARD_CACHE_DIR", None)
+    try:
+        # 지정하지 않으면 러너 계정의 ~/.cache/vibeguard
+        assert _cache_dir("pip") == os.path.expanduser("~/.cache/vibeguard/pip")
+
+        # 배포에서는 호스트와 러너 컨테이너가 같은 경로로 공유하는 폴더를 쓴다
+        os.environ["VIBEGUARD_CACHE_DIR"] = "/srv/vibeguard/cache"
+        assert _cache_dir("trivy") == "/srv/vibeguard/cache/trivy"
+
+        # 빈 값은 지정하지 않은 것으로 본다(compose에서 ${X:-}로 비워 넘기는 경우)
+        os.environ["VIBEGUARD_CACHE_DIR"] = ""
+        assert _cache_dir("pip") == os.path.expanduser("~/.cache/vibeguard/pip")
+
+        # 상대 경로는 도커 마운트에 쓸 수 없다. 계약대로 {"error"}와 종료 코드 1
+        os.environ["VIBEGUARD_CACHE_DIR"] = "relative/cache"
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            try:
+                _cache_dir("pip")
+                raise AssertionError("상대 경로가 통과했다")
+            except SystemExit as stop:
+                assert stop.code == 1
+        assert "절대 경로" in json.loads(out.getvalue())["error"]
+    finally:
+        os.environ.pop("VIBEGUARD_CACHE_DIR", None)
+        if saved is not None:
+            os.environ["VIBEGUARD_CACHE_DIR"] = saved
+
+
 if __name__ == "__main__":
     test_outcome()
     test_counts()
     test_findings()
-    print("통과: outcome 판정, junit 파싱, Trivy 보고서 파싱이 약속대로 동작한다.")
+    test_cache_dir()
+    print("통과: outcome 판정, junit 파싱, Trivy 보고서 파싱, 캐시 위치 결정이 약속대로 동작한다.")

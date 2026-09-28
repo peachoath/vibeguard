@@ -47,9 +47,8 @@ SUPPORTED_STACK = "python-pytest"
 VENV_MOUNT = "/venv"
 
 # pip이 받은 휠을 모아 두는 자리. 검사 사이에 재사용해서 설치를 줄인다.
-# 실측에서 병목은 컨테이너가 아니라 pip install이었다.
+# 실측에서 병목은 컨테이너가 아니라 pip install이었다. 호스트 쪽 위치는 _cache_dir("pip").
 PIP_CACHE_MOUNT = "/pip-cache"
-PIP_CACHE_HOST = os.path.expanduser("~/.cache/vibeguard/pip")
 
 # 리포가 의존성을 선언하는 파일. lock 파일이 있는 리포는 여기까지 오지 않는다.
 # 탐지만 하고 "수동 확인 필요"로 안내하기로 결정되어 있어, 상류에서 걸러진다.
@@ -58,8 +57,8 @@ REQUIREMENTS_FILE = "requirements.txt"
 # Trivy 취약점 DB를 두는 자리. 전개 후 1.3GB라 검사마다 받을 수 없어 호스트에 공유한다.
 # :ro 없이 얹는다. 네트워크가 열린 스캔 컨테이너가 DB를 스스로 갱신하기 때문이다
 # (2026-09-13 결정).
+# 호스트 쪽 위치는 _cache_dir("trivy").
 TRIVY_CACHE_MOUNT = "/trivy-cache"
-TRIVY_CACHE_HOST = os.path.expanduser("~/.cache/vibeguard/trivy")
 TRIVY_REPORT = "trivy.json"
 
 # Trivy는 DB 압축파일(113MB)을 임시 폴더에 받은 뒤 캐시에 푼다. 샌드박스의 /tmp는 64MB
@@ -73,6 +72,21 @@ def _fail(message: str) -> None:
     """계약을 지킨 채로 실패를 알리고 끝낸다."""
     print(json.dumps({"error": message}, ensure_ascii=False))
     raise SystemExit(1)
+
+
+def _cache_dir(name: str) -> str:
+    """검사 사이에 공유하는 호스트 캐시(pip·Trivy)의 위치.
+
+    기본값은 러너를 돌리는 계정의 ~/.cache/vibeguard다. 러너가 컨테이너 안에서 도커
+    소켓으로 샌드박스를 띄우는 배포에서는 이 경로가 호스트 도커에 그대로 전달되는데,
+    러너 컨테이너의 ~는 호스트에 없는 경로다. 그래서 호스트와 러너 컨테이너가 같은
+    경로로 공유하는 폴더를 VIBEGUARD_CACHE_DIR로 지정한다.
+    """
+    root = os.environ.get("VIBEGUARD_CACHE_DIR") or os.path.expanduser("~/.cache/vibeguard")
+    # 도커 마운트는 절대 경로만 받는다. 상대 경로면 러너의 작업 위치에 따라 뜻이 바뀐다.
+    if not os.path.isabs(root):
+        _fail("VIBEGUARD_CACHE_DIR는 절대 경로여야 한다: " + root)
+    return os.path.join(root, name)
 
 
 def _paths(repo_path: str) -> tuple[str, str, str]:
@@ -109,7 +123,8 @@ def install(repo_path: str, phase: str) -> dict:
     # 호스트 쪽에서 미리 만든다. 도커가 만들게 두면 root 소유가 되어
     # 비특권 컨테이너가 쓰지 못한다. artifacts는 러너가 알아서 만든다.
     os.makedirs(venv_dir, exist_ok=True)
-    os.makedirs(PIP_CACHE_HOST, exist_ok=True)
+    pip_cache = _cache_dir("pip")
+    os.makedirs(pip_cache, exist_ok=True)
 
     # ponytail: 매번 전부 다시 깐다. PRE_PATCH 뒤의 POST_PATCH를 바뀐 패키지만
     # 올리는 방식으로 줄일 수 있지만, 그건 측정해서 느릴 때 할 일이다.
@@ -126,7 +141,7 @@ def install(repo_path: str, phase: str) -> dict:
         network=True,                    # ② 설치는 네트워크가 있어야 한다
         extra_mounts=[
             (venv_dir, VENV_MOUNT, "rw"),
-            (PIP_CACHE_HOST, PIP_CACHE_MOUNT, "rw"),
+            (pip_cache, PIP_CACHE_MOUNT, "rw"),
         ],
     )
 
@@ -269,7 +284,8 @@ def run_trivy(repo_path: str) -> dict:
     repo_abs, _, artifacts_dir = _paths(repo_path)
     # 임시 폴더는 미리 있어야 한다. Trivy는 TMPDIR 아래에 새 폴더를 만들 뿐 TMPDIR 자체는
     # 만들지 않는다. 호스트에서 만들어야 root 소유가 되지 않는 것은 다른 마운트와 같다.
-    os.makedirs(os.path.join(TRIVY_CACHE_HOST, "tmp"), exist_ok=True)
+    trivy_cache = _cache_dir("trivy")
+    os.makedirs(os.path.join(trivy_cache, "tmp"), exist_ok=True)
 
     # 이전 실행의 보고서가 남아 있으면, 이번 스캔이 실패해도 결과가 있는 것처럼 읽힌다.
     report = os.path.join(artifacts_dir, TRIVY_REPORT)
@@ -289,7 +305,7 @@ def run_trivy(repo_path: str) -> dict:
         artifacts_dir,
         network=True,                    # ① 스캔은 DB 갱신에 네트워크가 필요하다
         image=SCAN_IMAGE,
-        extra_mounts=[(TRIVY_CACHE_HOST, TRIVY_CACHE_MOUNT, "rw")],
+        extra_mounts=[(trivy_cache, TRIVY_CACHE_MOUNT, "rw")],
         env={"TMPDIR": TRIVY_TMP},
     )
 
