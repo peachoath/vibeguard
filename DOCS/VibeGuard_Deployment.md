@@ -16,16 +16,17 @@
 ```
 [단일 VM]  docker compose
   ├─ postgres      (로컬 DB. Supabase 사용 시 불필요)
-  └─ api-server    (Spring Boot, :8080 → 호스트 :8088)
+  ├─ api-server    (Spring Boot, :8080 → 호스트 :8088)
+  └─ agent-runner  (Node + Claude SDK, :4000)
+       │              └─ 컨테이너 3종(스캔/설치/테스트) 샌드박스를 호스트 Docker로 실행
        └─ FE(Vercel) ──REST/SSE──▶ api-server
-       └─ agent-runner (에이전트 팀 담당, 추후 통합)
 ```
 
 - **DB 선택지 2가지**
   - (A) 컨테이너 postgres — `.env`의 DB_URL 미설정 시 기본. 완전 오프라인·데모용.
   - (B) Supabase 관리형 — `.env`에 `DB_URL/DB_USER/DB_PASSWORD` 지정. 공유 개발·운영용.
-- **FE는 Vercel 분리 배포**, DB는 Supabase 권장. api-server만 VM의 Compose로 띄운다.
-- **agent-runner**는 에이전트 팀 담당이라 아직 Compose에 placeholder(주석)로만 있다.
+- **FE는 Vercel 분리 배포**, DB는 Supabase 권장. api-server + agent-runner를 VM의 Compose로 띄운다.
+- **agent-runner**는 스캔·설치·테스트 샌드박스(컨테이너 3종, 방향 전환 v2)를 **호스트 Docker 소켓**을 통해 띄우므로 compose에서 소켓을 마운트한다(데모/신뢰 환경 한정, NFR-S1).
 
 ---
 
