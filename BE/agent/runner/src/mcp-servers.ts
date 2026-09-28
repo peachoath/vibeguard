@@ -37,7 +37,7 @@ const ADVISORY_TIMEOUT_MS = 60_000
  * 자식 프로세스에 넘길 환경변수.
  *
  * PATH는 샌드박스 러너가 `docker`를 찾는 데 필요하고, HOME은 Trivy·pip·advisory
- * 캐시 위치(~/.cache/vibeguard)를 정하는 데 필요하다. 상속에 기대지 않고 명시한다.
+ * 캐시 기본 위치(~/.cache/vibeguard)를 정하는 데 필요하다. 상속에 기대지 않고 명시한다.
  */
 function childEnv(extraKeys: string[] = []): Record<string, string> {
   const env: Record<string, string> = {}
@@ -47,6 +47,11 @@ function childEnv(extraKeys: string[] = []): Record<string, string> {
   }
   return env
 }
+
+// 샌드박스 CLI(BE/agent/sandbox/cli.py)가 읽는 설정. 여기서 넘기지 않으면 MCP 서버를
+// 거치며 사라진다. 러너가 컨테이너 안에서 도는 배포에서 pip·Trivy 캐시를 호스트와 같은
+// 경로로 공유할 때 쓴다.
+const SANDBOX_ENV_KEYS = ['VIBEGUARD_CACHE_DIR']
 
 // 공식 서버(ESM-only, main/exports 없음)는 require.resolve가 동작하지 않는다.
 // workspace root의 node_modules를 향하는 상대 URL로 직접 경로를 잡는다.
@@ -70,14 +75,14 @@ function buildServers(githubToken?: string): Record<string, McpServerConfig> {
       type: 'stdio',
       command: process.execPath,
       args: [entry('scanner-mcp')],
-      env: childEnv(),
+      env: childEnv(SANDBOX_ENV_KEYS),
       timeout: SANDBOX_TIMEOUT_MS,
     },
     testrunner: {
       type: 'stdio',
       command: process.execPath,
       args: [entry('testrunner-mcp')],
-      env: childEnv(),
+      env: childEnv(SANDBOX_ENV_KEYS),
       timeout: SANDBOX_TIMEOUT_MS,
     },
     advisory: {
