@@ -16,6 +16,12 @@ dist/
 **/.env
 **/.env.*
 
+# ── 샌드박스: 이미지엔 cli.py·runner.py·image/ 만 필요 ──
+# venv는 이미지 빌드 시 새로 생성, fixtures/artifacts는 런타임에 불필요(빌드 경량화)
+sandbox/.venv/
+sandbox/fixtures/
+sandbox/artifacts/
+
 # ── 로그 / 캐시 ──
 npm-debug.log*
 yarn-error.log*
