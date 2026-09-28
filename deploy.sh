@@ -22,6 +22,38 @@ else
   exit 1
 fi
 
+# 샌드박스 이미지 태그(러너가 런타임에 이 태그로 컨테이너를 띄운다)
+SANDBOX_IMAGE="vibeguard-sandbox:0.1"
+SCAN_IMAGE="vibeguard-scan:0.1"
+SANDBOX_DIR="BE/agent/sandbox/image"
+
+# 샌드박스 이미지 2종 빌드 (agent-runner가 실행 시점에 참조).
+# compose는 이 이미지를 빌드하지 않으므로 배포 전에 여기서 만든다.
+# scan 이미지는 sandbox 이미지를 FROM 하므로 반드시 sandbox → scan 순서로 빌드한다.
+# 재현성을 위해 --platform linux/amd64 로 고정(PRD §15 R2).
+build_sandbox_images() {
+  if [ ! -f "${SANDBOX_DIR}/Dockerfile" ]; then
+    echo "[deploy] 경고: ${SANDBOX_DIR}/Dockerfile 없음 — 샌드박스 이미지 빌드를 건너뜁니다." >&2
+    return 0
+  fi
+  local rebuild="${REBUILD_SANDBOX:-0}"
+
+  if [ "$rebuild" != "1" ] && docker image inspect "$SANDBOX_IMAGE" >/dev/null 2>&1; then
+    echo "[deploy] 샌드박스 이미지 존재: ${SANDBOX_IMAGE} (재빌드하려면 REBUILD_SANDBOX=1)"
+  else
+    echo "[deploy] 샌드박스 베이스 이미지 빌드: ${SANDBOX_IMAGE}"
+    docker build --platform linux/amd64 -t "$SANDBOX_IMAGE" "$SANDBOX_DIR"
+  fi
+
+  if [ "$rebuild" != "1" ] && docker image inspect "$SCAN_IMAGE" >/dev/null 2>&1; then
+    echo "[deploy] 스캔 이미지 존재: ${SCAN_IMAGE} (재빌드하려면 REBUILD_SANDBOX=1)"
+  else
+    echo "[deploy] 스캔 이미지 빌드: ${SCAN_IMAGE}"
+    docker build --platform linux/amd64 -t "$SCAN_IMAGE" \
+      -f "${SANDBOX_DIR}/Dockerfile.scan" "$SANDBOX_DIR"
+  fi
+}
+
 cmd="${1:-up}"
 
 case "$cmd" in
@@ -35,8 +67,11 @@ case "$cmd" in
   up)
     if [ ! -f .env ]; then
       echo "[deploy] 경고: 루트 .env가 없습니다. 기본값으로 진행합니다."
-      echo "         실제 배포는 'cp BE/api-server/.env.example .env' 후 값을 채우세요."
+      echo "         실제 배포는 'cp .env.example .env' 후 값을 채우세요."
     fi
+    # agent-runner가 런타임에 참조하는 샌드박스 이미지를 먼저 만든다.
+    # 이 단계가 없으면 스캔·설치·테스트 컨테이너 기동이 실패한다.
+    build_sandbox_images
     echo "[deploy] 빌드 + 기동 (postgres + api-server + agent-runner)"
     $COMPOSE up -d --build
 
