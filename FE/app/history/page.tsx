@@ -1,11 +1,12 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Radar } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Sk } from "../components/skeleton";
 import { ErrorView } from "../components/error-view";
+import { EmptyState } from "../components/empty-state";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
 import { useRepositories, useScans } from "@/lib/queries";
@@ -120,7 +121,7 @@ export default function HistoryPage() {
 
         <section className="history-timeline-card">
           <div className="history-card-heading">
-            <div><h2>스캔 타임라인</h2><p>완료·차단·증명 없음·설치 실패 등 종료 원인을 숨기지 않고 보존합니다.</p></div>
+            <div><h2>검사 타임라인</h2><p>완료·차단·증명 없음·설치 실패 등 종료 원인을 숨기지 않고 보존합니다.</p></div>
           </div>
 
           {error && !loading && <ErrorView onRetry={() => { scansQuery.refetch(); reposQuery.refetch(); }} />}
@@ -153,13 +154,13 @@ export default function HistoryPage() {
             ))}
             {!loading && visible.length === 0 && (
               scans.length === 0 ? (
-                <div className="empty-state" style={{ alignSelf: "center" }}>
-                  <svg className="empty-state-icon" width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <h3>스캔 기록이 없습니다</h3>
-                  <p>저장소를 연결하고 스캔을 실행하면 이력이 쌓입니다.</p>
-                  <Link className="empty-cta" href="/repositories">저장소 관리</Link>
+                <div style={{ alignSelf: "center" }}>
+                  <EmptyState
+                    icon={<Radar size={28} />}
+                    title="아직 검사 기록이 없습니다"
+                    description="저장소를 연결하고 검사를 실행하면 이력이 쌓입니다."
+                    action={<Link className="empty-cta" href="/repositories">저장소로 이동</Link>}
+                  />
                 </div>
               ) : (
                 <p className="history-empty" style={{ alignSelf: "center" }}>선택한 조건의 검사 이력이 없습니다.</p>

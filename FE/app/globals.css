@@ -1340,7 +1340,11 @@ a { color: inherit; text-decoration: none; }
   padding: 52px 24px; text-align: center;
 }
 .empty-state-sm { padding: 24px 16px; }
-.empty-state-icon { color: #c3cdd8; margin-bottom: 2px; }
+.empty-state-illus { width: 64px; height: 64px; margin-bottom: 4px; display: grid; place-items: center; border-radius: 20px; }
+.empty-state-illus.tone-default { background: #eef4ff; color: #3f7cf0; }
+.empty-state-illus.tone-positive { background: #e8f8f0; color: #12a568; }
+.empty-state-illus.tone-danger { background: #fdeef1; color: #e5495f; }
+.empty-state-sm .empty-state-illus { width: 48px; height: 48px; border-radius: 15px; }
 .empty-state h3 { margin: 0; font-size: 15px; font-weight: 600; color: #3d4a5c; }
 .empty-state p { margin: 0; font-size: 13px; color: #748092; max-width: 260px; line-height: 1.55; }
 .empty-cta {

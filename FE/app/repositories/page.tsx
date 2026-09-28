@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronsUpDown, Lock, Plus, Search, X } from "lucide-react";
+import { ChevronDown, ChevronsUpDown, FolderGit2, Lock, Plus, Search, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { Sk } from "../components/skeleton";
 import { ErrorView } from "../components/error-view";
@@ -9,6 +9,7 @@ import Link from "next/link";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
 import { useFocusTrap } from "../components/use-focus-trap";
+import { EmptyState } from "../components/empty-state";
 import { useConnectRepo, useGithubRepos, useRepositories, type GitHubRepo } from "@/lib/queries";
 
 export default function RepositoriesPage() {
@@ -231,14 +232,12 @@ export default function RepositoriesPage() {
                   </button>
                 ))}
                 {!loading && repos.length === 0 && (
-                  <div className="empty-state">
-                    <svg className="empty-state-icon" width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
-                    </svg>
-                    <h3>연결된 저장소가 없습니다</h3>
-                    <p>GitHub 저장소를 연결하면 보안 파이프라인을 바로 시작할 수 있습니다.</p>
-                    <button className="empty-cta" onClick={openAdd}>저장소 연결하기</button>
-                  </div>
+                  <EmptyState
+                    icon={<FolderGit2 size={28} />}
+                    title="연결된 저장소가 없습니다"
+                    description="GitHub 저장소를 연결하면 보안 파이프라인을 바로 시작할 수 있습니다."
+                    action={<button className="empty-cta" onClick={openAdd}>저장소 연결하기</button>}
+                  />
                 )}
                 {!loading && repos.length > 0 && visible.length === 0 && (
                   <p className="repository-empty">&quot;{query}&quot;와 일치하는 저장소가 없습니다.</p>

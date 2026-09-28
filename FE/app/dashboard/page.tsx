@@ -1,10 +1,11 @@
 "use client";
 
-import { ArrowUp, MoreHorizontal } from "lucide-react";
+import { ArrowUp, MoreHorizontal, Radar } from "lucide-react";
 import Link from "next/link";
 import { type CSSProperties, useMemo, useState } from "react";
 import { Sk } from "../components/skeleton";
 import { ErrorView } from "../components/error-view";
+import { EmptyState } from "../components/empty-state";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
 import { useDashboardSummary, useRepositories, useScans, type ScanDto } from "@/lib/queries";
@@ -197,14 +198,13 @@ export default function DashboardPage() {
                     </div>
                   ))}
                   {recentScans.length === 0 && (
-                    <div className="empty-state empty-state-sm">
-                      <svg className="empty-state-icon" width="36" height="36" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <h3>스캔 기록이 없습니다</h3>
-                      <p>저장소를 연결하고 첫 스캔을 실행해보세요.</p>
-                      <Link className="empty-cta" href="/repositories">저장소 관리</Link>
-                    </div>
+                    <EmptyState
+                      size="sm"
+                      icon={<Radar size={22} />}
+                      title="아직 검사 기록이 없습니다"
+                      description="저장소를 연결하고 첫 검사를 실행해보세요."
+                      action={<Link className="empty-cta" href="/repositories">저장소로 이동</Link>}
+                    />
                   )}
                 </div>
               </section>
