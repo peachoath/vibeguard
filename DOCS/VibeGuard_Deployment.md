@@ -35,9 +35,20 @@
 - (선택) 무료 VM: Oracle Cloud Always Free 등. 데모만이면 팀원 머신도 가능.
 - GitHub OAuth App 1개 (Client ID/Secret) — 로그인용
 
+**Ubuntu VM에 Docker 설치 (없다면):**
+```bash
+# 공식 편의 스크립트 (Ubuntu/Debian)
+curl -fsSL https://get.docker.com | sudo sh
+# 현재 사용자를 docker 그룹에 추가(sudo 없이 docker 사용) — 재로그인 필요
+sudo usermod -aG docker $USER && newgrp docker
+docker --version && docker compose version   # 설치 확인
+```
+
 ---
 
 ## 3. 배포 절차
+
+> **원클릭:** 저장소 루트에서 `bash scripts/deploy.sh` — `.env` 확인 → 빌드·기동 → 헬스 대기까지 자동. `.env`가 없으면 생성만 하고 값 입력을 안내한다. 수동 절차는 아래 3.1~3.6.
 
 ### 3.1 저장소 클론
 ```bash
@@ -73,6 +84,26 @@ docker compose down          # 컨테이너·네트워크 제거 (DB 볼륨은 �
 docker compose down -v       # DB 볼륨까지 삭제 (초기화)
 ```
 
+### 3.6 VM 배포 시 추가 확인 (실배포에서 가장 흔한 실패 지점)
+
+**(a) 방화벽 / 클라우드 보안그룹 인바운드 개방**
+클라우드 VM은 기본적으로 외부 포트가 막혀 있어, 포트를 열지 않으면 브라우저·FE에서 접속되지 않는다.
+```bash
+# Ubuntu ufw 예시 (api-server 호스트 포트 8088)
+sudo ufw allow 8088/tcp
+```
+- **Oracle Cloud**: VCN → Security List(또는 NSG)에 Ingress 규칙으로 해당 포트(TCP) 추가.
+- **AWS**: EC2 Security Group Inbound에 포트 추가.
+- postgres 포트(5433)는 **외부에 열지 않는다**(DB는 컨테이너 내부 통신만). Supabase를 쓰면 로컬 postgres 자체가 불필요.
+
+**(b) GitHub OAuth App 콜백 URL**
+VM 배포 시 콜백이 로컬이 아니라 VM 도메인/IP여야 한다. GitHub OAuth App 설정에서:
+- Authorization callback URL: `https://<도메인 또는 VM_IP>/login/oauth2/code/github`
+- `.env`의 `CORS_ALLOWED_ORIGINS`·`POST_LOGIN_URI`도 FE(Vercel) 실제 도메인으로 지정.
+
+**(c) HTTPS (크로스 오리진 세션 쿠키)**
+FE가 Vercel(크로스 오리진)이면 세션 쿠키가 `SameSite=None; Secure`여야 하므로 **api-server 앞단에 HTTPS가 필수**다. VM 앞에 Nginx/Caddy 리버스 프록시로 TLS 종단을 두고 8088로 프록시한다. (데모를 동일 오리진으로 하면 생략 가능.)
+
 ---
 
 ## 4. 포트
@@ -107,6 +138,9 @@ docker compose down -v       # DB 볼륨까지 삭제 (초기화)
 - SpringDoc(`/v3/api-docs`, `/swagger-ui.html`) 비활성화
 - actuator 노출을 `health,info`로 축소, `health` 상세 정보 숨김
 - 로깅 INFO / SQL WARN
+- **DB 커넥션 풀(HikariCP)**: Supabase 세션 풀러 대비 작은 풀(`DB_POOL_MAX` 기본 5, `DB_POOL_MIN` 1), `max-lifetime` 30분. 무료 티어 커넥션 상한을 넘지 않게 조정 가능.
+
+> 검증(2026-09-28): 로컬 postgres에 `SPRING_PROFILES_ACTIVE=prod`로 기동 → 부팅 성공, `/actuator/health` UP, `/swagger-ui.html` 비노출(401) 확인. Supabase로 바꾸려면 `.env`의 `DB_URL`만 세션 풀러(5432)+`?sslmode=require` 값으로 교체하면 된다.
 
 > HTTPS·도메인·리버스 프록시(Nginx 등)는 VM 앞단에서 처리한다. FE가 크로스 오리진(Vercel)이면 세션 쿠키가 `SameSite=None; Secure`여야 하므로 **HTTPS가 필수**다.
 
