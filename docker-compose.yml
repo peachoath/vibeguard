@@ -1,10 +1,10 @@
 # VibeGuard — 단일 VM 데모 인프라 (PRD §12: 데모는 단일 VM + Docker Compose)
 #
-# 구성: postgres(로컬 DB) + api-server(Spring Boot).
+# 구성: postgres(로컬 DB) + api-server(Spring Boot) + agent-runner(Node, Claude SDK).
 #   - DB는 기본적으로 이 로컬 postgres를 쓴다. Supabase 관리형을 쓰려면
 #     루트 .env의 DB_URL/DB_USER/DB_PASSWORD를 Supabase 값으로 지정하면 된다.
-#   - agent-runner는 다른 담당(에이전트 팀) 영역이라 Dockerfile 작성 후 통합한다.
-#     아래 placeholder를 참고해 주석을 해제하면 된다.
+#   - agent-runner는 컨테이너 3종(스캔/설치/테스트) 샌드박스를 호스트 Docker로 띄우므로
+#     Docker 소켓을 마운트한다(데모/신뢰 환경 한정, NFR-S1).
 #
 # 사용법:
 #   cp BE/api-server/.env.example .env   # 루트에 .env 두고 값 채우기 (또는 아래 기본값 사용)
@@ -69,17 +69,35 @@ services:
       start_period: 40s
     restart: unless-stopped
 
-  # agent-runner (에이전트 팀 담당) — Dockerfile 작성 후 주석 해제
-  # agent-runner:
-  #   build: ./BE/agent
-  #   container_name: vibeguard-runner
-  #   environment:
-  #     ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-  #     API_BASE_URL: http://api-server:8080
-  #     RUNNER_CALLBACK_SECRET: ${RUNNER_CALLBACK_SECRET:-dev-secret-change-me}
-  #   ports: ['4000:4000']
-  #   # 스캐너·테스트 샌드박스 실행을 위해 Docker 소켓 마운트가 필요할 수 있음(에이전트 팀 결정)
-  #   # volumes: ['/var/run/docker.sock:/var/run/docker.sock']
+  agent-runner:
+    build:
+      context: ./BE/agent
+    container_name: vibeguard-runner
+    depends_on:
+      api-server:
+        condition: service_started
+    environment:
+      # Claude Agent SDK (필수 — .env에 실제 키 지정). 미설정 시 런너는 골격 모드로 동작.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # 서버로의 HMAC 콜백 대상. 컨테이너 네트워크에서 api-server를 서비스명으로 참조.
+      API_BASE_URL: ${AGENT_API_BASE_URL:-http://api-server:8080}
+      # 콜백 서명 키 — api-server의 RUNNER_CALLBACK_SECRET과 동일해야 함(NFR-S4).
+      RUNNER_CALLBACK_SECRET: ${RUNNER_CALLBACK_SECRET:-dev-secret-change-me}
+      RUNNER_PORT: 4000
+    # 호스트 노출 포트. 로컬 4000이 점유된 경우 .env의 RUNNER_HOST_PORT로 변경.
+    ports:
+      - '${RUNNER_HOST_PORT:-4000}:4000'
+    # 컨테이너 3종(스캔/설치/테스트) 샌드박스를 호스트 Docker로 띄우기 위해 소켓 마운트.
+    # 주의: 소켓 마운트는 강력한 권한이므로 데모/신뢰 환경에서만 사용(NFR-S1).
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:4000/health | grep -q ok || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
 
 volumes:
   pgdata:
