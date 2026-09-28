@@ -91,6 +91,11 @@ services:
     # 주의: 소켓 마운트는 강력한 권한이므로 데모/신뢰 환경에서만 사용(NFR-S1).
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    # 호스트 docker 그룹 GID를 런타임에 부여해 소켓 접근 EACCES 방지.
+    # 이미지 기본값은 999. 호스트가 다르면 .env에 DOCKER_GID 지정:
+    #   echo "DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)" >> .env
+    group_add:
+      - '${DOCKER_GID:-999}'
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://localhost:4000/health | grep -q ok || exit 1']
       interval: 10s
