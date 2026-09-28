@@ -28,35 +28,41 @@ public class FindingService {
         this.testRunRepository = testRunRepository;
     }
 
+    /**
+     * Finding 목록 — 스캔 소유권 사전 검증 포함 (IDOR 방지).
+     * 스캔이 존재하지 않거나 소유권 없는 경우 404.
+     */
     @Transactional(readOnly = true)
-    public Page<FindingDto> list(UUID scanId, Severity severity, FindingType type,
+    public Page<FindingDto> list(UUID scanId, UUID userId, Severity severity, FindingType type,
                                  FindingStatus status, Pageable pageable) {
+        if (!findingRepository.isScanOwnedByUser(scanId, userId)) {
+            throw new NotFoundException("스캔을 찾을 수 없습니다: " + scanId);
+        }
         return findingRepository.search(scanId, severity, type, status, pageable)
             .map(FindingDto::from);
     }
 
     @Transactional(readOnly = true)
-    public FindingDetailDto detail(UUID findingId) {
-        return FindingDetailDto.from(require(findingId));
+    public FindingDetailDto detail(UUID findingId, UUID userId) {
+        return FindingDetailDto.from(requireForUser(findingId, userId));
     }
 
-    /** 오탐 처리 — status를 IGNORED로. rationale에 사유를 병기(기록 보존). */
+    /** 오탐 처리 — status를 IGNORED로. rationale에 사유를 병기(기록 보존). 소유권 검증 포함. */
     @Transactional
-    public FindingDto ignore(UUID findingId, String reason) {
-        Finding f = require(findingId);
+    public FindingDto ignore(UUID findingId, UUID userId, String reason) {
+        Finding f = requireForUser(findingId, userId);
         f.setStatus(FindingStatus.IGNORED);
         String note = "[IGNORED] " + reason;
         f.setRationale(f.getRationale() == null ? note : f.getRationale() + "\n" + note);
         return FindingDto.from(f);
     }
 
-    /** 회귀 증거 — 최신 attempt 패치의 phase별(PRE/POST) 실행 결과. 재현 테스트 코드는 없음. */
+    /** 회귀 증거 — 최신 attempt 패치의 phase별 실행 결과. 소유권 검증 포함. */
     @Transactional(readOnly = true)
-    public EvidenceDto evidence(UUID findingId) {
-        require(findingId);
+    public EvidenceDto evidence(UUID findingId, UUID userId) {
+        requireForUser(findingId, userId);
         List<Patch> patches = patchRepository.findByFindingIdOrderByAttemptNo(findingId);
         if (patches.isEmpty()) {
-            // 회귀 미수행(기본 등급/테스트 없음) — 빈 증거
             return new EvidenceDto(findingId, List.of(), 0);
         }
         Patch latest = patches.get(patches.size() - 1);
@@ -69,10 +75,10 @@ public class FindingService {
         return new EvidenceDto(findingId, phases, patches.size());
     }
 
-    /** 패치 diff — 최신 attempt 패치의 매니페스트 변경. */
+    /** 패치 diff — 최신 attempt 패치의 매니페스트 변경. 소유권 검증 포함. */
     @Transactional(readOnly = true)
-    public DiffDto diff(UUID findingId) {
-        Finding f = require(findingId);
+    public DiffDto diff(UUID findingId, UUID userId) {
+        Finding f = requireForUser(findingId, userId);
         List<Patch> patches = patchRepository.findByFindingIdOrderByAttemptNo(findingId);
         if (patches.isEmpty()) {
             throw new NotFoundException("패치가 없는 Finding입니다: " + findingId);
@@ -82,8 +88,18 @@ public class FindingService {
         return new DiffDto(findingId, "unified", path, latest.getDiff());
     }
 
-    private Finding require(UUID findingId) {
+    /** 내부 전용 단순 조회 — 런너 이벤트 핸들러 등 사용자 컨텍스트 없는 경로용. */
+    Finding require(UUID findingId) {
         return findingRepository.findById(findingId)
+            .orElseThrow(() -> new NotFoundException("Finding을 찾을 수 없습니다: " + findingId));
+    }
+
+    /**
+     * 소유권 검증 조회 — 사용자 대면 API용 (IDOR 방지).
+     * 존재하지 않거나 소유권 없는 경우 동일하게 404 반환하여 존재 여부를 노출하지 않는다.
+     */
+    private Finding requireForUser(UUID findingId, UUID userId) {
+        return findingRepository.findByIdAndUserId(findingId, userId)
             .orElseThrow(() -> new NotFoundException("Finding을 찾을 수 없습니다: " + findingId));
     }
 }

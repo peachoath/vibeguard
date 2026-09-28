@@ -1,0 +1,47 @@
+# 운영 프로파일 (SPRING_PROFILES_ACTIVE=prod)
+# 기본 application.yml 위에 얹혀 운영 안전값으로 오버라이드한다.
+# DB·OAuth·토큰키·CORS 등 값은 모두 환경변수로 주입한다(application.yml 참조).
+
+spring:
+  datasource:
+    # Supabase 관리형 PostgreSQL 16 — Supavisor 세션 풀러(포트 5432) + sslmode=require.
+    # (트랜잭션 풀러 6543은 Flyway·prepared statement와 상성이 나빠 금지 — PRD §12)
+    #   DB_URL  예) jdbc:postgresql://aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
+    #   DB_USER 예) postgres.<project-ref>
+    hikari:
+      # 무료 티어 커넥션 상한을 고려해 풀을 작게 유지(세션 풀러라 커넥션당 세션 점유).
+      maximum-pool-size: ${DB_POOL_MAX:5}
+      minimum-idle: ${DB_POOL_MIN:1}
+      connection-timeout: 30000
+      # 풀러 뒤 유휴 커넥션이 끊길 수 있어 최대 수명을 풀러 타임아웃보다 짧게.
+      max-lifetime: 1800000
+  jpa:
+    properties:
+      hibernate:
+        # 운영에선 SQL 포맷팅 로그 비활성(application.yml의 format_sql 오버라이드).
+        format_sql: false
+
+springdoc:
+  # 운영에서는 API 문서/Swagger UI를 노출하지 않는다(공격 표면 축소).
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # 운영에서는 health/info만 외부 노출. metrics/prometheus는 내부 수집기에서만.
+        include: health,info
+  endpoint:
+    health:
+      # 운영에서는 상세 정보를 노출하지 않는다(DB·디스크 등 내부 상태 은닉).
+      show-details: never
+
+# 운영 로깅: 애플리케이션은 INFO, SQL 로깅은 끔.
+logging:
+  level:
+    root: INFO
+    dev.vibeguard: INFO
+    org.hibernate.SQL: WARN

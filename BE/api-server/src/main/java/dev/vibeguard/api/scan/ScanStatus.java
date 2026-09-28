@@ -7,10 +7,13 @@ package dev.vibeguard.api.scan;
  * QUEUED → CLONING → SCANNING(A1) → VERIFYING(A2) → REGRESSION_CHECK(A3) → PR_CREATING(A4) → COMPLETED
  *                          ↓             ↓                   ↓                     ↓
  *                       FAILED      NO_FINDINGS        PATCH_FAILED          REGRESSION_BLOCKED
- * </pre>
  *
- * REGRESSION_CHECK(A3): 설치→테스트(패치 전) → 버전 상향 → 설치→테스트(패치 후).
- * 테스트가 없는 리포는 회귀 증명 없이 통과 처리 후 PR_CREATING으로 진행.
+ * 미구성 종료 상태:
+ *   AGENT_NOT_CONFIGURED — ANTHROPIC_API_KEY 미설정으로 에이전트 세션을 시작하지 못함.
+ *   MCP_NOT_AVAILABLE    — API 키는 있지만 MCP 서버가 응답하지 않거나 미등록.
+ *   INSTALL_FAILED       — 의존성 설치 실패로 회귀 테스트를 실행하지 못함.
+ *   NO_TESTS             — 리포에 테스트가 없어 회귀 증명 없이 완료(vacuous truth).
+ * </pre>
  */
 public enum ScanStatus {
     QUEUED,
@@ -23,7 +26,15 @@ public enum ScanStatus {
     NO_FINDINGS,
     PATCH_FAILED,
     REGRESSION_BLOCKED,
-    FAILED;
+    FAILED,
+    /** ANTHROPIC_API_KEY 미설정으로 에이전트를 실행하지 못함. */
+    AGENT_NOT_CONFIGURED,
+    /** API 키는 있지만 필요한 MCP 서버가 미응답/미등록. */
+    MCP_NOT_AVAILABLE,
+    /** 의존성 설치 실패로 테스트 실행 불가. */
+    INSTALL_FAILED,
+    /** 리포에 테스트가 없어 회귀 증명 생략. */
+    NO_TESTS;
 
     /** 더 이상 진행하지 않는 종료 상태인지 여부. */
     public boolean isTerminal() {
@@ -31,7 +42,11 @@ public enum ScanStatus {
             || this == NO_FINDINGS
             || this == PATCH_FAILED
             || this == REGRESSION_BLOCKED
-            || this == FAILED;
+            || this == FAILED
+            || this == AGENT_NOT_CONFIGURED
+            || this == MCP_NOT_AVAILABLE
+            || this == INSTALL_FAILED
+            || this == NO_TESTS;
     }
 
     /** 진행 중(비종료) 상태 목록 — 중복 스캔 방지 조회에 사용. */

@@ -3,6 +3,7 @@ package dev.vibeguard.api;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 
 /**
  * 컨텍스트 로드 스모크 테스트 (통합).
@@ -11,6 +12,7 @@ import org.springframework.context.annotation.Import;
  * 실행에는 Docker가 필요하다.
  */
 @SpringBootTest
+@ActiveProfiles("test")
 @Import(TestcontainersConfiguration.class)
 class ApiServerApplicationTests {
 

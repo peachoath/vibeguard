@@ -1,29 +1,104 @@
 "use client";
 
-import { ChevronDown, Settings } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import DashboardNav from "../components/dashboard-nav";
+import { useEffect, useMemo, useState } from "react";
+import { Sk } from "../components/skeleton";
+import { ErrorView } from "../components/error-view";
+import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
+import { apiFetch } from "@/lib/api";
 
-const scans = [
-  { time: "오늘 16:28", repo: "payment-api", branch: "main", state: "완료", tone: "complete", summary: "6 Finding · 24/24 PASS", duration: "4분 38초", pr: "PR #42 열기", pkg: "pyyaml" },
-  { time: "오늘 15:52", repo: "auth-service", branch: "develop", state: "회귀 차단", tone: "blocked", summary: "23/24 · 1개 회귀 실패", duration: "5분 12초", pr: "PR 미생성", pkg: "urllib3" },
-  { time: "오늘 14:10", repo: "web-client", branch: "main", state: "테스트 없음", tone: "untested", summary: "기존 테스트 없음 · 증명 없음", duration: "2분 44초", pr: "PR #39 열기", pkg: "jinja2" },
-  { time: "어제 21:06", repo: "billing-worker", branch: "main", state: "설치 실패", tone: "failed", summary: "의존성 설치 실패 · Finding 스킵", duration: "3분 02초", pr: "PR 없음", pkg: "cryptography" },
-  { time: "어제 18:31", repo: "api-gateway", branch: "main", state: "완료", tone: "complete", summary: "3 Finding · 110/110 PASS", duration: "4분 05초", pr: "PR #38 열기", pkg: "idna" },
-] as const;
+interface ScanDto {
+  id: string;
+  repositoryId: string;
+  ref: string;
+  commitSha: string | null;
+  status: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  durationMs: number | null;
+  errorCode: string | null;
+}
+
+interface Repository {
+  id: string;
+  fullName: string;
+}
+
+function statusTone(status: string): string {
+  if (status === "COMPLETED") return "complete";
+  if (status === "REGRESSION_BLOCKED") return "blocked";
+  if (status === "FAILED") return "failed";
+  return "waiting";
+}
+
+function statusLabel(status: string): string {
+  if (status === "COMPLETED") return "완료";
+  if (status === "REGRESSION_BLOCKED") return "회귀 차단";
+  if (status === "FAILED") return "실패";
+  if (status === "QUEUED") return "대기 중";
+  if (status === "RUNNING") return "진행 중";
+  return status;
+}
+
+function formatDuration(ms: number | null): string {
+  if (!ms) return "-";
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  return m > 0 ? `${m}분 ${s % 60}초` : `${s}초`;
+}
 
 export default function HistoryPage() {
+  const [scans, setScans] = useState<ScanDto[]>([]);
+  const [repoMap, setRepoMap] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [range, setRange] = useState("30");
   const [status, setStatus] = useState("all");
   const [auditOpen, setAuditOpen] = useState(false);
 
-  const visibleScans = useMemo(() => scans.filter((scan) => status === "all" || scan.tone === status), [status]);
+  useEffect(() => {
+    Promise.all([
+      apiFetch<ScanDto[]>("/api/v1/scans"),
+      apiFetch<Repository[]>("/api/v1/repositories"),
+    ])
+      .then(([scanList, repos]) => {
+        setScans(scanList);
+        setRepoMap(Object.fromEntries(repos.map((r) => [r.id, r.fullName])));
+      })
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const now = Date.now();
+  const rangeDays = parseInt(range, 10);
+
+  const visible = useMemo(() => scans
+    .filter((s) => {
+      if (status !== "all" && statusTone(s.status) !== status) return false;
+      if (s.startedAt && (now - new Date(s.startedAt).getTime()) > rangeDays * 86_400_000) return false;
+      return true;
+    }), [scans, status, range, now, rangeDays]);
+
+  const summary = useMemo(() => ({
+    complete: scans.filter((s) => s.status === "COMPLETED").length,
+    clean: scans.filter((s) => s.status === "COMPLETED" && !s.errorCode).length,
+    failed: scans.filter((s) => s.status === "FAILED").length,
+    blocked: scans.filter((s) => s.status === "REGRESSION_BLOCKED").length,
+  }), [scans]);
 
   function exportCsv() {
-    const csv = ["time,repository,branch,status,summary,duration,pr", ...visibleScans.map((scan) => [scan.time, scan.repo, scan.branch, scan.state, scan.summary, scan.duration, scan.pr].join(","))].join("\n");
+    const rows = visible.map((s) => [
+      s.startedAt ? new Date(s.startedAt).toLocaleString("ko-KR") : "-",
+      repoMap[s.repositoryId] ?? s.repositoryId,
+      s.ref,
+      statusLabel(s.status),
+      formatDuration(s.durationMs),
+      s.errorCode ?? "-",
+    ].join(","));
+    const csv = ["time,repository,branch,status,duration,error", ...rows].join("\n");
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     link.download = `vibeguard-history-${range}days.csv`;
@@ -33,51 +108,89 @@ export default function HistoryPage() {
 
   return (
     <main className="history-page">
-      <header className="dashboard-header">
-        <Link className="dashboard-brand" href="/" aria-label="Vibe Guard 홈"><Image src="/vibeguard_logo_1.png" alt="Vibe Guard" width={452} height={170} priority /></Link>
-        <DashboardNav active="history" />
-        <div className="account-area">
-          <button className="settings-button" aria-label="설정"><Settings size={21} /></button>
-          <span className="account-avatar">KS</span><span className="account-copy"><strong>김세원</strong><small>security@vibeguard.ai</small></span>
-        </div>
-      </header>
+      <AppHeader active="history" />
 
       <ScreenContent>
         <section className="history-heading">
           <div><h1>검사 이력</h1><p>과거 검사와 패치 결과, PR 상태를 시간순으로 추적합니다.</p></div>
           <div className="history-controls">
-            <label><select value={range} onChange={(event) => setRange(event.target.value)} aria-label="조회 기간"><option value="7">최근 7일</option><option value="30">최근 30일</option><option value="90">최근 90일</option></select><ChevronDown size={13} /></label>
-            <label><select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="검사 상태"><option value="all">전체 상태</option><option value="complete">완료</option><option value="blocked">회귀 차단</option><option value="untested">테스트 없음</option><option value="failed">설치 실패</option></select><ChevronDown size={13} /></label>
+            <label>
+              <select value={range} onChange={(e) => setRange(e.target.value)} aria-label="조회 기간">
+                <option value="7">최근 7일</option><option value="30">최근 30일</option><option value="90">최근 90일</option>
+              </select>
+              <ChevronDown size={13} />
+            </label>
+            <label>
+              <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="검사 상태">
+                <option value="all">전체 상태</option>
+                <option value="complete">완료</option>
+                <option value="blocked">회귀 차단</option>
+                <option value="failed">실패</option>
+                <option value="waiting">진행 중</option>
+              </select>
+              <ChevronDown size={13} />
+            </label>
             <button type="button" onClick={exportCsv}>내보내기</button>
           </div>
         </section>
 
         <section className="history-summary" aria-label="검사 이력 요약">
-          <article className="complete"><span>완료</span><strong>28</strong><small>검증 완료</small></article>
-          <article className="clean"><span>발견 없음</span><strong>17</strong><small>안전한 스캔</small></article>
-          <article className="failed"><span>패치 실패</span><strong>2</strong><small>수정 후보 없음</small></article>
-          <article className="blocked"><span>회귀 차단</span><strong>3</strong><small>PR 생성 차단</small></article>
+          <article className="complete"><span>완료</span><strong>{summary.complete}</strong><small>검증 완료</small><Image src="/history_1.png" alt="" width={440} height={440} unoptimized /></article>
+          <article className="clean"><span>발견 없음</span><strong>{summary.clean}</strong><small>안전한 스캔</small><Image src="/history_2.png" alt="" width={440} height={440} unoptimized /></article>
+          <article className="failed"><span>패치 실패</span><strong>{summary.failed}</strong><small>수정 후보 없음</small><Image src="/history_3.png" alt="" width={440} height={440} unoptimized /></article>
+          <article className="blocked"><span>회귀 차단</span><strong>{summary.blocked}</strong><small>PR 생성 차단</small><Image src="/history_4.png" alt="" width={440} height={440} unoptimized /></article>
           <Link className="history-dashboard-link" href="/dashboard" scroll={false}>보안 현황</Link>
         </section>
 
         <section className="history-timeline-card">
           <div className="history-card-heading">
             <div><h2>스캔 타임라인</h2><p>완료·차단·증명 없음·설치 실패 등 종료 원인을 숨기지 않고 보존합니다.</p></div>
-            <button type="button" className={auditOpen ? "active" : ""} onClick={() => setAuditOpen((value) => !value)}>감사 로그 보기</button>
+            <button type="button" className={auditOpen ? "active" : ""} onClick={() => setAuditOpen((v) => !v)}>감사 로그 보기</button>
           </div>
           {auditOpen && <p className="audit-message" role="status">모든 검사 상태 변경과 PR 생성 기록이 보존되고 있습니다.</p>}
+
+          {error && !loading && <ErrorView onRetry={() => { setError(false); window.location.reload(); }} />}
+
           <div className="history-timeline" tabIndex={0} aria-label="스캔 이력 목록">
-            {visibleScans.map((scan) => (
-              <article className={`history-row ${scan.tone}`} key={`${scan.repo}-${scan.time}`}>
-                <span className="timeline-dot" aria-hidden="true" />
-                <div className="history-repository"><time>{scan.time}</time><strong>{scan.repo} / {scan.branch}</strong></div>
-                <span className="history-state">{scan.state}</span>
-                <p>{scan.summary}</p><b>{scan.duration}</b>
-                {scan.pr.startsWith("PR #") ? <a className="history-pr" href="https://github.com/peachoath/vibeguard/pulls" target="_blank" rel="noreferrer">{scan.pr}</a> : <span className="history-pr unavailable">{scan.pr}</span>}
-                <Link className="history-detail" href={`/results/${scan.pkg}`} scroll={false}>상세 보기 →</Link>
+            {loading && Array.from({ length: 4 }, (_, i) => (
+              <article key={i} className="sk-history-row" aria-hidden="true">
+                <div className="history-repository">
+                  <Sk w={100} h={10} r={4} />
+                  <Sk w={180} h={13} r={4} style={{ marginTop: 6 }} />
+                </div>
+                <Sk w={80} h={28} r={14} />
+                <Sk w={90} h={12} r={4} />
+                <Sk w={44} h={12} r={4} />
+                <Sk w={70} h={28} r={14} />
               </article>
             ))}
-            {visibleScans.length === 0 && <p className="history-empty">선택한 상태의 검사 이력이 없습니다.</p>}
+            {!loading && visible.map((scan) => (
+              <article className={`history-row ${statusTone(scan.status)}`} key={scan.id}>
+                <span className="timeline-dot" aria-hidden="true" />
+                <div className="history-repository">
+                  <time>{scan.startedAt ? new Date(scan.startedAt).toLocaleString("ko-KR") : "-"}</time>
+                  <strong>{repoMap[scan.repositoryId] ?? "…"} / {scan.ref}</strong>
+                </div>
+                <span className="history-state">{statusLabel(scan.status)}</span>
+                <p>{scan.commitSha ? `커밋 ${scan.commitSha.slice(0, 7)}` : "커밋 정보 없음"}</p>
+                <b>{formatDuration(scan.durationMs)}</b>
+                <Link className="history-detail" href={`/results?scanId=${scan.id}`} scroll={false}>상세 보기 →</Link>
+              </article>
+            ))}
+            {!loading && visible.length === 0 && (
+              scans.length === 0 ? (
+                <div className="empty-state" style={{ alignSelf: "center" }}>
+                  <svg className="empty-state-icon" width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <h3>스캔 기록이 없습니다</h3>
+                  <p>저장소를 연결하고 스캔을 실행하면 이력이 쌓입니다.</p>
+                  <Link className="empty-cta" href="/repositories">저장소 관리</Link>
+                </div>
+              ) : (
+                <p className="history-empty" style={{ alignSelf: "center" }}>선택한 조건의 검사 이력이 없습니다.</p>
+              )
+            )}
           </div>
         </section>
       </ScreenContent>
