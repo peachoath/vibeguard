@@ -46,9 +46,15 @@ function ScanContent() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
   const [reconnecting, setReconnecting] = useState(false);
+  const [streamLost, setStreamLost] = useState(false);
   const esRef = useRef<EventSource | null>(null);
   const activityListRef = useRef<HTMLDivElement>(null);
+  const doneRef = useRef(false);
+  const retriesRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startScan = useStartScan();
+
+  const MAX_SSE_RETRIES = 6;
 
   const subscribeStream = (scanId: string) => {
     // SseHub.broadcast()는 named events(event: stage, event: log, event: done)를 전송한다.
@@ -56,6 +62,12 @@ function ScanContent() {
     // 반드시 addEventListener로 각 이벤트를 수신해야 한다.
     const es = new EventSource(apiSseUrl(`/api/v1/scans/${scanId}/stream`), { withCredentials: true });
     esRef.current = es;
+
+    es.onopen = () => {
+      // 연결(재)성립 — 재시도 카운터/배너 초기화.
+      retriesRef.current = 0;
+      setStreamLost(false);
+    };
 
     es.addEventListener("stage", (e: MessageEvent) => {
       const evt: SseStageEvent = JSON.parse(e.data);
@@ -76,13 +88,24 @@ function ScanContent() {
     });
 
     es.addEventListener("done", () => {
+      doneRef.current = true;
       setDone(true);
       es.close();
     });
 
     es.onerror = () => {
-      // 연결 오류 시 닫기. 재연결은 브라우저 기본 동작에 맡기지 않고 명시적으로 차단.
+      // 브라우저 기본 재연결을 막고 직접 지수 백오프로 재시도.
+      // 재접속 시 백엔드는 종료 상태면 즉시 done을, 진행 중이면 이후 이벤트를 보내 자연 복구된다.
       es.close();
+      if (doneRef.current) return;
+      if (retriesRef.current >= MAX_SSE_RETRIES) {
+        setError("실시간 연결이 계속 끊깁니다. 네트워크를 확인하고 새로고침 해주세요.");
+        return;
+      }
+      const delay = Math.min(1000 * 2 ** retriesRef.current, 8000);
+      retriesRef.current += 1;
+      setStreamLost(true);
+      reconnectTimerRef.current = setTimeout(() => subscribeStream(scanId), delay);
     };
   };
 
@@ -117,7 +140,10 @@ function ScanContent() {
         }
       });
 
-    return () => esRef.current?.close();
+    return () => {
+      esRef.current?.close();
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoId, ref]);
 
@@ -173,6 +199,13 @@ function ScanContent() {
             <Link href="/repositories">전체 저장소</Link>
           </div>
         </section>
+
+        {streamLost && !done && (
+          <p className="scan-reconnect-banner" role="status">
+            <span className="scan-reconnect-dot" aria-hidden="true" />
+            실시간 연결이 끊겨 재연결 중입니다…
+          </p>
+        )}
 
         <div className="live-scan-layout">
           <div className="live-scan-main">

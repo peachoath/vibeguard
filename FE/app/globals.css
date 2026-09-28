@@ -23,6 +23,10 @@ button, input, select, textarea { font: inherit; }
 a { color: inherit; text-decoration: none; }
 /* 키보드 포커스 기본 표시 — 요소별 커스텀 규칙(클래스 선택자)이 명시도로 우선한다. */
 :focus-visible { outline: 2px solid #347df6; outline-offset: 2px; }
+/* 본문 바로가기 — 평소 숨김, 키보드 포커스 시 노출 */
+.skip-to-content { position: fixed; top: 8px; left: 8px; z-index: 10000; padding: 10px 16px; border-radius: 10px; background: #111a2c; color: #fff; font-size: 14px; font-weight: 700; box-shadow: 0 6px 18px rgba(17, 26, 44, .3); transform: translateY(-160%); transition: transform .18s ease; }
+.skip-to-content:focus { transform: translateY(0); }
+.app-main-target:focus { outline: none; }
 .screen-content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .landing-page .screen-content { display: flow-root; }
 @media (prefers-reduced-motion: reduce) {
@@ -450,6 +454,9 @@ a { color: inherit; text-decoration: none; }
 .scan-page-heading p { margin: 0; color: #748092; font-size: 17px; letter-spacing: -.35px; }
 .scan-page-heading .heading-buttons { padding-top: 8px; }
 .scan-page-heading .heading-buttons a { height: 40px; padding: 0 26px; border: 1px solid #e0e7f0; border-radius: 17px; background: #fbfcfe; box-shadow: 0 5px 13px rgba(31, 66, 110, .08); display: grid; place-items: center; font-size: 15px; font-weight: 700; }
+.scan-reconnect-banner { margin: 0 0 14px; padding: 10px 16px; border: 1px solid #ffe0b2; border-radius: 14px; background: #fff8ef; color: #b26a00; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 9px; }
+.scan-reconnect-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff9800; animation: scan-reconnect-pulse 1s ease-in-out infinite; }
+@keyframes scan-reconnect-pulse { 0%, 100% { opacity: .35; transform: scale(.85); } 50% { opacity: 1; transform: scale(1); } }
 .live-scan-layout { display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(360px, 1fr); gap: 18px; }
 .live-scan-main { min-width: 0; display: grid; gap: 20px; }
 .progress-card { height: 150px; padding: 3px 42px 3px 15px; border-radius: 25px; background: #eaf2ff; display: grid; grid-template-columns: 177px 124px minmax(0, 1fr); align-items: center; gap: 18px; overflow: hidden; }

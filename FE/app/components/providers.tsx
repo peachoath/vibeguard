@@ -16,11 +16,15 @@ function Toaster() {
     return () => window.removeEventListener('vg:toast', handler)
   }, [])
 
-  if (!toasts.length) return null
+  // 라이브 영역은 항상 렌더해야 동적으로 추가되는 토스트를 스크린리더가 낭독한다.
   return (
-    <div className="toaster" role="region" aria-label="알림">
+    <div className="toaster" role="region" aria-label="알림 목록" aria-live="polite" aria-atomic="false">
       {toasts.map((t) => (
-        <div key={t.id} className={`toast toast-${t.kind}`} role="status">
+        <div
+          key={t.id}
+          className={`toast toast-${t.kind}`}
+          role={t.kind === 'error' || t.kind === 'warn' ? 'alert' : 'status'}
+        >
           <span className="toast-msg">{t.message}</span>
           <button
             type="button"

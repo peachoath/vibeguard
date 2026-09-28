@@ -16,6 +16,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="ko" data-scroll-behavior="smooth">
       <body>
+        <a href="#main-content" className="skip-to-content">본문으로 건너뛰기</a>
         <Providers>
           <AuthProvider>
             <PageTransition>{children}</PageTransition>
