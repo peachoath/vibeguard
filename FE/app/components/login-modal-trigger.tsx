@@ -60,7 +60,7 @@ export function LoginModalProvider({ children }: { children: ReactNode }) {
             </div>
 
             <div className="login-dialog-actions">
-              <a className="login-oauth-button" href="https://github.com/login">연결하기</a>
+              <a className="login-oauth-button" href={`${process.env.NEXT_PUBLIC_API_URL}/oauth2/authorization/github`}>연결하기</a>
               <button type="button" className="login-cancel-button" onClick={() => setOpen(false)}>취소</button>
             </div>
 
