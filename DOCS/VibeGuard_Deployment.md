@@ -5,9 +5,15 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v1.0 · 2026-09-27 |
+| 문서 버전 | v1.1 · 2026-09-27 (배포 대상 Oracle Cloud 확정) |
 | 대상 | `BE/api-server` (Spring Boot 4 / Java 21) + PostgreSQL |
+| **배포 인프라(확정)** | **Oracle Cloud Always Free VM** (영구 무료) + FE는 Vercel · DB는 Supabase |
 | 관련 문서 | [PRD](./VibeGuard_PRD.md) · [Architecture](./VibeGuard_Architecture.md) · [Team Roles](./VibeGuard_Team_Roles.md) |
+
+> **배포 대상 확정.** 무료 조건과 Docker(샌드박스 컨테이너 3종) 완전 지원을 모두 만족하는
+> **Oracle Cloud Always Free VM**을 배포 대상으로 확정한다. ARM Ampere(최대 4 OCPU/24GB)를
+> 영구 무료로 제공해 스캐너·테스트 컨테이너를 돌리기에 충분하다. FE는 Vercel, DB는 Supabase로
+> 분리한다. 실배포 작업은 방향 전환(v2) 코드 반영이 안정화된 뒤 진행한다(순서상 코드 우선).
 
 ---
 
@@ -32,9 +38,12 @@
 
 ## 2. 사전 요구사항
 
-- VM에 **Docker + Docker Compose** 설치 (Docker Engine 24+ 권장)
-- (선택) 무료 VM: Oracle Cloud Always Free 등. 데모만이면 팀원 머신도 가능.
+- **배포 VM: Oracle Cloud Always Free (확정)** — ARM Ampere 인스턴스(영구 무료). VM에 **Docker + Docker Compose** 설치 (Docker Engine 24+ 권장).
+  - 대안(리허설/오프라인용): 팀원 머신에서도 동일 Compose로 구동 가능.
 - GitHub OAuth App 1개 (Client ID/Secret) — 로그인용
+
+> Oracle Cloud VM은 ARM(aarch64)이다. 이미지 빌드/실행 시 아키텍처에 유의하고, 회귀 테스트 컨테이너는
+> 재현성을 위해 `--platform linux/amd64`로 고정한다(PRD §15 R2). 방화벽·보안그룹 인바운드 개방은 §3.6 참고.
 
 **Ubuntu VM에 Docker 설치 (없다면):**
 ```bash
