@@ -57,7 +57,6 @@ export default function HistoryPage() {
   const [error, setError] = useState(false);
   const [range, setRange] = useState("30");
   const [status, setStatus] = useState("all");
-  const [auditOpen, setAuditOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -145,9 +144,7 @@ export default function HistoryPage() {
         <section className="history-timeline-card">
           <div className="history-card-heading">
             <div><h2>스캔 타임라인</h2><p>완료·차단·증명 없음·설치 실패 등 종료 원인을 숨기지 않고 보존합니다.</p></div>
-            <button type="button" className={auditOpen ? "active" : ""} onClick={() => setAuditOpen((v) => !v)}>감사 로그 보기</button>
           </div>
-          {auditOpen && <p className="audit-message" role="status">모든 검사 상태 변경과 PR 생성 기록이 보존되고 있습니다.</p>}
 
           {error && !loading && <ErrorView onRetry={() => { setError(false); window.location.reload(); }} />}
 

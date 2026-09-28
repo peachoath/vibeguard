@@ -217,7 +217,7 @@ function ResultsContent() {
                           </span>
                         </td>
                         <td><span className={`finding-regression ${item.status.toLowerCase()}`}>{item.status}</span></td>
-                        <td><Link className="finding-detail-link" href={`/results/${item.id}`} scroll={false}>상세 보기 →</Link></td>
+                        <td><Link className="finding-detail-link" href={`/findings/${item.id}`} scroll={false}>상세 보기 →</Link></td>
                       </tr>
                     ))}
                   </tbody>

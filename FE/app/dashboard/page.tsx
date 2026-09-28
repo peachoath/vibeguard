@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, ChevronDown, ListFilter, MoreHorizontal } from "lucide-react";
+import { ArrowUp, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Sk } from "../components/skeleton";
@@ -39,6 +39,18 @@ function formatDuration(ms: number | null): string {
   return m > 0 ? `${m}분 ${s % 60}초` : `${s}초`;
 }
 
+/**
+ * 회귀 통과율 — 회귀 테스트 단계까지 도달한 스캔 중 통과 비율.
+ * COMPLETED(통과) / (COMPLETED + REGRESSION_BLOCKED(차단)). 패치 성공률과 달리
+ * 패치 자체를 못 만든 PATCH_FAILED는 분모에서 제외한다.
+ */
+function regressionPassRate(scans: ScanDto[]): number {
+  const completed = scans.filter((s) => s.status === "COMPLETED").length;
+  const blocked = scans.filter((s) => s.status === "REGRESSION_BLOCKED").length;
+  const total = completed + blocked;
+  return total === 0 ? 0 : Math.round((completed / total) * 100);
+}
+
 function statusTone(status: string): string {
   if (status === "COMPLETED") return "complete";
   if (status === "REGRESSION_BLOCKED") return "blocked";
@@ -61,8 +73,7 @@ export default function DashboardPage() {
   const [repoMap, setRepoMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [range, setRange] = useState("30");
-  const [filtersVisible, setFiltersVisible] = useState(false);
+  const [regressionRate, setRegressionRate] = useState(0);
   const [rateMenuOpen, setRateMenuOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -77,6 +88,7 @@ export default function DashboardPage() {
       .then(([sum, scans, repos]) => {
         setSummary(sum);
         setRecentScans(scans.slice(0, 5));
+        setRegressionRate(regressionPassRate(scans));
         setRepoMap(Object.fromEntries(repos.map((r) => [r.id, r.fullName])));
       })
       .catch(() => setError(true))
@@ -97,6 +109,7 @@ export default function DashboardPage() {
           apiFetch<Repository[]>("/api/v1/repositories"),
         ]);
         setRecentScans(scans.slice(0, 5));
+        setRegressionRate(regressionPassRate(scans));
         setRepoMap(Object.fromEntries(repos.map((r) => [r.id, r.fullName])));
       } catch {}
     }, 5000);
@@ -117,7 +130,7 @@ export default function DashboardPage() {
     const csv = ["repository,branch,status,time", ...rows].join("\n");
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    link.download = `vibeguard-security-${range}days.csv`;
+    link.download = "vibeguard-security-summary.csv";
     link.click();
     URL.revokeObjectURL(link.href);
   }
@@ -130,16 +143,7 @@ export default function DashboardPage() {
         <section className="security-heading">
           <div><h1>보안 현황</h1><p>VibeGuard의 현재 보안 현황과 검증된 패치 성과를 확인합니다.</p></div>
           <div className="security-controls">
-            <label>
-              <select value={range} onChange={(e) => setRange(e.target.value)} aria-label="보안 현황 기간">
-                <option value="7">최근 7일</option>
-                <option value="30">최근 30일</option>
-                <option value="90">최근 90일</option>
-              </select>
-              <ChevronDown size={13} />
-            </label>
             <button type="button" onClick={exportSummary}><ArrowUp size={13} /> 내보내기</button>
-            <button type="button" className={filtersVisible ? "active" : ""} onClick={() => setFiltersVisible((v) => !v)}><ListFilter size={13} /> 필터</button>
           </div>
         </section>
 
@@ -187,8 +191,6 @@ export default function DashboardPage() {
               <article><span>총 스캔</span><strong>{summary?.totalScans ?? 0}</strong><small>전체 스캔 수</small></article>
             </section>
 
-            {filtersVisible && <div className="security-filter-note" role="status">전체 저장소 · 모든 심각도 · 검증 완료 포함</div>}
-
             <div className="security-chart-row">
               <section className="patch-trend-card">
                 <div className="security-card-heading">
@@ -218,7 +220,7 @@ export default function DashboardPage() {
                   </div>
                 )}
                 <div className="gauge">
-                  <div><strong>{patchRate}%</strong><span>회귀 통과율</span></div>
+                  <div><strong>{regressionRate}%</strong><span>회귀 통과율</span></div>
                 </div>
                 <div className="gauge-summary">
                   <div><span>총 PR</span><strong>{summary?.totalPrs ?? 0}건</strong></div>

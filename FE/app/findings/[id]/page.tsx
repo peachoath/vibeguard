@@ -31,6 +31,8 @@ interface FindingDetailDto {
   references: string[] | null;
 }
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+
 const SEVERITY_LABELS: Record<string, string> = {
   CRITICAL: "치명적", HIGH: "높음", MEDIUM: "보통", LOW: "낮음",
 };
@@ -183,12 +185,12 @@ export default function FindingDetailPage() {
             )}
 
             <div className="finding-detail-actions">
-              <Link href={`/api/v1/findings/${id}/evidence`} target="_blank">
+              <a href={`${API_BASE}/api/v1/findings/${id}/evidence`} target="_blank" rel="noreferrer">
                 증거 JSON
-              </Link>
-              <Link href={`/api/v1/findings/${id}/diff`} target="_blank">
+              </a>
+              <a href={`${API_BASE}/api/v1/findings/${id}/diff`} target="_blank" rel="noreferrer">
                 Diff JSON
-              </Link>
+              </a>
               <Link href="/results">← 목록으로</Link>
             </div>
           </div>

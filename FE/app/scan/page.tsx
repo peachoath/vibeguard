@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
-import { apiFetch, apiSseUrl } from "@/lib/api";
+import { apiFetch, apiSseUrl, ApiError } from "@/lib/api";
 
 interface ScanDto {
   id: string;
@@ -58,6 +58,7 @@ function ScanContent() {
   const [done, setDone] = useState(false);
   const [finalStatus, setFinalStatus] = useState("");
   const [error, setError] = useState("");
+  const [reconnecting, setReconnecting] = useState(false);
   const esRef = useRef<EventSource | null>(null);
   const activityListRef = useRef<HTMLDivElement>(null);
 
@@ -72,7 +73,28 @@ function ScanContent() {
         setScan(s);
         subscribeStream(s.id);
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => {
+        if (e instanceof ApiError && e.status === 409) {
+          setReconnecting(true);
+          apiFetch<ScanDto[]>("/api/v1/scans")
+            .then((scans) => {
+              const TERMINAL = ["COMPLETED", "NO_FINDINGS", "PATCH_FAILED", "REGRESSION_BLOCKED", "FAILED", "AGENT_NOT_CONFIGURED", "MCP_NOT_AVAILABLE", "INSTALL_FAILED", "NO_TESTS"];
+              const active = scans.find(
+                (s) => s.repositoryId === repoId && s.ref === ref && !TERMINAL.includes(s.status),
+              );
+              setReconnecting(false);
+              if (active) {
+                setScan(active);
+                subscribeStream(active.id);
+              } else {
+                setError("이미 진행 중인 스캔을 찾을 수 없습니다.");
+              }
+            })
+            .catch(() => { setReconnecting(false); setError("이미 진행 중인 스캔을 찾을 수 없습니다."); });
+        } else {
+          setError(e.message);
+        }
+      });
 
     return () => esRef.current?.close();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,6 +151,17 @@ function ScanContent() {
 
     return () => cancelAnimationFrame(frame);
   }, [logs.length]);
+
+  if (reconnecting) {
+    return (
+      <main className="scan-page">
+        <AppHeader active="scan" />
+        <ScreenContent>
+          <p className="scan-error">이미 진행 중인 스캔이 있습니다. 연결 중…</p>
+        </ScreenContent>
+      </main>
+    );
+  }
 
   if (error) {
     return (
