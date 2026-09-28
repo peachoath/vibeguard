@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import LoginModalTrigger, { LoginModalProvider } from "./components/login-modal-trigger";
+import { LoginModalProvider } from "./components/login-modal-trigger";
 import ScreenContent from "./components/screen-content";
 import LandingHeader from "./components/landing-header";
 import ScrollDots from "./components/scroll-dots";
@@ -30,7 +30,7 @@ export default function Home() {
               <h1><span className="hero-highlight">취약점</span>은 줄이고<br />기능은 그대로</h1>
               <p>공식 DB 검증부터 안전 버전 결정, 회귀 테스트, PR 생성까지 순서대로 처리됩니다.</p>
               <div className="hero-actions">
-                <LoginModalTrigger variant="primary" label="점검하기" />
+                <a className="button button-primary" href="/repositories">점검하기</a>
               </div>
             </div>
 
