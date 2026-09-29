@@ -99,6 +99,18 @@ docker compose logs -f api-server # 부팅 로그
 ```
 > `scripts/deploy.sh`를 쓰면 위 (1)(2)가 자동으로 실행된다. 이미 있는 샌드박스 이미지는 재빌드하지 않는다(`REBUILD_SANDBOX=1`로 강제 재빌드).
 
+**프로덕션(EC2 + HTTPS)으로 기동:** FE(Vercel)가 크로스 오리진이라 세션 쿠키에 HTTPS가 필수다. Caddy가 앞단에서 TLS를 종단하는 프로덕션 오버레이(`docker-compose.prod.yml`)를 함께 올린다.
+```bash
+# .env 에 DEPLOY_DOMAIN(예: api.example.com), SPRING_PROFILES_ACTIVE=prod 지정
+# DNS A 레코드가 EC2 퍼블릭 IP(Elastic IP)를 가리키고, 보안그룹 80/443 개방 필요
+PROD=1 bash scripts/deploy.sh
+# 또는 수동:
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+- Caddy가 Let's Encrypt 인증서를 자동 발급(첫 기동 시 수십 초). 발급된 인증서는 `caddy_data` 볼륨에 영속된다.
+- 프로덕션 오버레이는 api-server 호스트 포트(8088) 직접 노출을 닫고, 외부 진입을 Caddy(443)로만 제한한다.
+- 도메인이 아직 없으면(IP만) `infra/Caddyfile`의 안내대로 `tls internal`(자체 서명, 브라우저 경고)로 리허설 가능.
+
 ### 3.4 확인
 ```bash
 curl http://localhost:8088/actuator/health   # {"status":"UP"}

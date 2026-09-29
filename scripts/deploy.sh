@@ -40,9 +40,37 @@ else
 fi
 
 echo "[4/5] 빌드 & 기동 (postgres → api-server → agent-runner)"
-docker compose up -d --build
+# PROD=1 이면 AWS EC2용 프로덕션 오버레이(Caddy HTTPS + api-server 포트 비노출)를 함께 적용.
+COMPOSE_FILES=(-f docker-compose.yml)
+if [ "${PROD:-0}" = "1" ]; then
+  DOMAIN="$(grep -E '^DEPLOY_DOMAIN=' .env | cut -d= -f2)"
+  if [ -z "$DOMAIN" ]; then
+    echo "  PROD=1 이지만 .env의 DEPLOY_DOMAIN 이 비어 있습니다. (예: api.example.com)"
+    echo "  DNS A 레코드가 이 EC2의 퍼블릭 IP를 가리키고, 보안그룹 80/443 을 열어야 합니다."
+    exit 1
+  fi
+  COMPOSE_FILES+=(-f docker-compose.prod.yml)
+  echo "  프로덕션 모드 — Caddy HTTPS(도메인: ${DOMAIN}) 적용"
+fi
+docker compose "${COMPOSE_FILES[@]}" up -d --build
 
 echo "[5/5] 헬스 대기"
+if [ "${PROD:-0}" = "1" ]; then
+  DOMAIN="$(grep -E '^DEPLOY_DOMAIN=' .env | cut -d= -f2)"
+  echo "  프로덕션: Caddy TLS 발급에 수십 초 걸릴 수 있습니다. https://${DOMAIN}/actuator/health 확인."
+  for i in $(seq 1 30); do
+    if curl -fsS "https://${DOMAIN}/actuator/health" 2>/dev/null | grep -q UP; then
+      echo "  OK — api-server UP (https://${DOMAIN}/actuator/health)"
+      docker compose "${COMPOSE_FILES[@]}" ps
+      exit 0
+    fi
+    sleep 5
+  done
+  echo "  헬스 확인 실패 — 로그 확인:  docker compose ${COMPOSE_FILES[*]} logs caddy api-server"
+  docker compose "${COMPOSE_FILES[@]}" ps
+  exit 1
+fi
+
 PORT="$(grep -E '^API_HOST_PORT=' .env | cut -d= -f2)"; PORT="${PORT:-8088}"
 for i in $(seq 1 30); do
   if curl -fsS "http://localhost:${PORT}/actuator/health" 2>/dev/null | grep -q UP; then
