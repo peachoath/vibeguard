@@ -152,6 +152,13 @@ CONFIRM_FREE_PLAN_DEPLOY=YES scripts/aws/deploy-free-tier.sh
 공인 IPv4는 Elastic IP 여부와 관계없이 시간당 비용 항목이므로 테스트가 끝나면 정지만 하지 말고 스택을 삭제한다.
 
 ```bash
+# 잠시 보존하되 컴퓨팅·공인 IPv4 사용을 멈춤
+scripts/aws/stop-free-tier.sh
+
+# 다음 작업 때 재시작(공인 IP가 바뀜)
+CONFIRM_START=YES scripts/aws/start-free-tier.sh
+
+# 테스트가 완전히 끝났으면 EC2·EBS·보안그룹 삭제
 CONFIRM_DESTROY=YES scripts/aws/destroy-free-tier.sh
 ```
 
