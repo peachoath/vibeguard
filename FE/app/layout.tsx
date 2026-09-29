@@ -3,6 +3,7 @@ import "./globals.css";
 import PageTransition from "./components/page-transition";
 import { AuthProvider } from "./components/auth-provider";
 import { Providers } from "./components/providers";
+import CommandPalette from "./components/command-palette";
 
 export const metadata: Metadata = {
   title: "VibeGuard",
@@ -16,9 +17,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="ko" data-scroll-behavior="smooth">
       <body>
+        <a href="#main-content" className="skip-to-content">본문으로 건너뛰기</a>
         <Providers>
           <AuthProvider>
             <PageTransition>{children}</PageTransition>
+            <CommandPalette />
           </AuthProvider>
         </Providers>
       </body>

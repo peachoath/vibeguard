@@ -1,36 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
-import { apiFetch } from "@/lib/api";
 import { Sk } from "../components/skeleton";
 import { ErrorView } from "../components/error-view";
 import { toast } from "../components/providers";
-
-interface UserProfile {
-  githubId: number;
-  login: string;
-  displayName: string;
-  email: string | null;
-  avatarUrl: string | null;
-  createdAt: string;
-  lastLoginAt: string | null;
-}
-
-interface UserStats {
-  repositoryCount: number;
-  scanCount: number;
-}
-
-interface UserSettings {
-  minSeverity: string;
-  excludedPaths: string[];
-  notifyEmail: boolean;
-}
+import {
+  useDeleteAccount,
+  useResyncProfile,
+  useSaveProfile,
+  useSaveSettings,
+  useUserProfile,
+  useUserSettings,
+  useUserStats,
+} from "@/lib/queries";
 
 const SEVERITY_OPTIONS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 const SEVERITY_LABELS: Record<string, string> = {
@@ -46,107 +33,76 @@ export default function SettingsPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("profile");
 
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [stats, setStats] = useState<UserStats | null>(null);
-  const [settings, setSettings] = useState<UserSettings | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const profileQuery = useUserProfile();
+  const statsQuery = useUserStats();
+  const settingsQuery = useUserSettings();
+  const profile = profileQuery.data ?? null;
+  const stats = statsQuery.data ?? null;
+  const settings = settingsQuery.data ?? null;
+  const loading = profileQuery.isPending || statsQuery.isPending || settingsQuery.isPending;
+  const error = profileQuery.isError || statsQuery.isError || settingsQuery.isError;
 
-  // Profile edit
-  const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
-  const [profileSaving, setProfileSaving] = useState(false);
+  // 편집 드래프트 — null이면 서버 값을 그대로 보여주고, 입력하면 그 값으로 덮어쓴다.
+  const [displayNameDraft, setDisplayName] = useState<string | null>(null);
+  const [emailDraft, setEmail] = useState<string | null>(null);
+  const [minSeverityDraft, setMinSeverity] = useState<string | null>(null);
+  const [notifyEmailDraft, setNotifyEmail] = useState<boolean | null>(null);
+  const displayName = displayNameDraft ?? profile?.displayName ?? "";
+  const email = emailDraft ?? profile?.email ?? "";
+  const minSeverity = minSeverityDraft ?? settings?.minSeverity ?? "LOW";
+  const notifyEmail = notifyEmailDraft ?? settings?.notifyEmail ?? false;
+
   const [profileSaved, setProfileSaved] = useState(false);
-
-  // Settings edit
-  const [minSeverity, setMinSeverity] = useState("LOW");
-  const [notifyEmail, setNotifyEmail] = useState(false);
-  const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
-
-  // Account
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [resyncing, setResyncing] = useState(false);
 
-  useEffect(() => {
-    Promise.all([
-      apiFetch<UserProfile>("/api/v1/users/me"),
-      apiFetch<UserStats>("/api/v1/users/me/stats"),
-      apiFetch<UserSettings>("/api/v1/users/me/settings"),
-    ])
-      .then(([p, s, cfg]) => {
-        setProfile(p);
-        setStats(s);
-        setSettings(cfg);
-        setDisplayName(p.displayName);
-        setEmail(p.email ?? "");
-        setMinSeverity(cfg.minSeverity);
-        setNotifyEmail(cfg.notifyEmail);
-      })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
-  }, []);
+  const saveProfileMut = useSaveProfile();
+  const resyncMut = useResyncProfile();
+  const saveSettingsMut = useSaveSettings();
+  const deleteMut = useDeleteAccount();
+  const profileSaving = saveProfileMut.isPending;
+  const resyncing = resyncMut.isPending;
+  const settingsSaving = saveSettingsMut.isPending;
+  const deleting = deleteMut.isPending;
 
   async function saveProfile() {
-    setProfileSaving(true);
     try {
-      const updated = await apiFetch<UserProfile>("/api/v1/users/me", {
-        method: "PATCH",
-        body: JSON.stringify({ displayName, email: email || null }),
-      });
-      setProfile(updated);
+      await saveProfileMut.mutateAsync({ displayName, email: email || null });
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 2000);
       toast.success("프로필이 저장되었습니다.");
     } catch {
       toast.error("프로필 저장에 실패했습니다.");
-    } finally {
-      setProfileSaving(false);
     }
   }
 
   async function resync() {
-    setResyncing(true);
     try {
-      const updated = await apiFetch<UserProfile>("/api/v1/users/me/resync", { method: "POST" });
-      setProfile(updated);
+      const updated = await resyncMut.mutateAsync();
       setDisplayName(updated.displayName);
       toast.success("GitHub 정보가 동기화되었습니다.");
     } catch {
       toast.error("동기화에 실패했습니다.");
-    } finally {
-      setResyncing(false);
     }
   }
 
   async function saveSettings() {
-    setSettingsSaving(true);
     try {
-      const updated = await apiFetch<UserSettings>("/api/v1/users/me/settings", {
-        method: "PATCH",
-        body: JSON.stringify({ minSeverity, notifyEmail }),
-      });
-      setSettings(updated);
+      await saveSettingsMut.mutateAsync({ minSeverity, notifyEmail });
       setSettingsSaved(true);
       setTimeout(() => setSettingsSaved(false), 2000);
       toast.success("설정이 저장되었습니다.");
     } catch {
       toast.error("설정 저장에 실패했습니다.");
-    } finally {
-      setSettingsSaving(false);
     }
   }
 
   async function deleteAccount() {
-    setDeleting(true);
     try {
-      await apiFetch<void>("/api/v1/users/me", { method: "DELETE" });
+      await deleteMut.mutateAsync();
       router.replace("/login");
     } catch {
       toast.error("계정 삭제에 실패했습니다. 다시 시도해주세요.");
-    } finally {
-      setDeleting(false);
     }
   }
 
@@ -182,7 +138,7 @@ export default function SettingsPage() {
           </aside>
 
           <div className="settings-main">
-            {error && !loading && <ErrorView onRetry={() => { setError(false); window.location.reload(); }} />}
+            {error && !loading && <ErrorView onRetry={() => { profileQuery.refetch(); statsQuery.refetch(); settingsQuery.refetch(); }} />}
 
             {loading && (
               <>

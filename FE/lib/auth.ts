@@ -1,28 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { apiFetch } from './api'
+import { useAuthUser, type AuthUser } from './queries'
 
-export interface AuthUser {
-  id: string
-  githubId: number
-  login: string
-  displayName: string
-  avatarUrl: string | null
-  email: string | null
-}
+export type { AuthUser }
 
+/** auth-guard 등에서 쓰는 현재 사용자 훅. React Query로 백업되어 authMe 캐시를 공유한다. */
 export function useCurrentUser() {
-  const [data, setData] = useState<AuthUser | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isError, setIsError] = useState(false)
-
-  useEffect(() => {
-    apiFetch<AuthUser>('/api/v1/auth/me')
-      .then((u) => setData(u))
-      .catch(() => setIsError(true))
-      .finally(() => setIsLoading(false))
-  }, [])
-
-  return { data, isLoading, isError }
+  const { data, isPending, isError } = useAuthUser()
+  return { data: data ?? null, isLoading: isPending, isError }
 }
