@@ -103,7 +103,7 @@ MCP 3종 실동작, 컨테이너 3종 러너, 적대적 검증 리포트(NFR-S9 
 - 상태: 서버=TanStack Query / UI=Zustand(혼용 금지), SSE 훅 `useScanStream`(수신 시 `setQueryData`)
 - API 타입은 OpenAPI 자동 생성(`npm run typegen`), 수기 정의 금지
 - **회귀 증거 뷰**(F-07): 패치 전 통과 로그 / 패치 후 통과 로그 / 버전 대조 (구 "TDD 증거"에서 명칭·내용 변경됨)
-- Vercel 배포: `VITE_API_BASE_URL` 주입 + `credentials:'include'`
+- Vercel 배포: `NEXT_PUBLIC_API_URL` 주입 + `credentials:'include'`
 - 발표 자료·시연 GIF("올려도 안 깨진다")
 
 ### 산출물

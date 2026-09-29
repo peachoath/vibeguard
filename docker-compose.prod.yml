@@ -31,10 +31,15 @@ services:
       - caddy_config:/config
     restart: unless-stopped
 
-  # 프로덕션에선 api-server 호스트 포트를 외부에 직접 열지 않는다.
-  # 외부 진입은 Caddy(443)만. (내부 네트워크로 caddy→api-server:8080 접근)
-  # !reset 으로 기본 compose의 ports 목록을 병합이 아니라 완전히 비운다(Compose 2.24+).
+  # 프로덕션에선 내부 서비스의 호스트 포트를 외부에 직접 열지 않는다.
+  # 외부 진입은 Caddy(80/443)만. !reset은 기본 compose의 ports를 완전히 비운다.
+  postgres:
+    ports: !reset []
+
   api-server:
+    ports: !reset []
+
+  agent-runner:
     ports: !reset []
 
 volumes:

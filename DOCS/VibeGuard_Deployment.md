@@ -84,10 +84,10 @@ EC2 → 인스턴스 → Security → Security groups → Inbound rules 편집:
 | Type | Port | Source | 용도 |
 |---|---|---|---|
 | SSH | 22 | **내 IP(My IP)** | 접속 (전체 개방 금지) |
+| HTTP | 80 | 0.0.0.0/0 | Caddy HTTPS 리다이렉트·인증서 발급 |
 | HTTPS | 443 | 0.0.0.0/0 | FE·브라우저 접속(Caddy TLS) |
-| Custom TCP | 8088 | 내 IP | (선택) api-server 직접 디버깅 |
 
-> DB 포트(5433)는 열지 않는다. HTTP(80)는 Caddy가 자동 HTTPS 리다이렉트/인증서 발급에 쓰므로 도메인을 붙일 때만 함께 연다.
+> 프로덕션 오버레이는 API(8088)·Runner(4000)·DB(5433)의 호스트 포트 노출을 제거한다. 보안 그룹에도 이 포트들을 열지 않는다.
 
 ### (3) 탄력적 IP 고정 (권장)
 EC2 → Elastic IPs → **Allocate** → 인스턴스에 **Associate**. 재부팅해도 IP가 안 바뀌어 OAuth 콜백 URL이 유지된다.
@@ -129,7 +129,7 @@ git clone https://github.com/peachoath/vibeguard.git && cd vibeguard
 
 ## 3. 배포 절차
 
-> **원클릭:** 저장소 루트에서 `bash scripts/deploy.sh` — `.env` 확인 → **샌드박스 이미지 빌드** → compose 빌드·기동 → 헬스 대기까지 자동(5단계). `.env`가 없으면 생성만 하고 값 입력을 안내한다. 수동 절차는 아래 3.1~3.6.
+> **원클릭:** 저장소 루트에서 `PROD=1 bash scripts/deploy.sh` — `.env` 및 운영 필수값 검증 → 작업·캐시 경로 준비 → **샌드박스 이미지 빌드** → compose 빌드·기동 → 헬스 대기까지 자동 처리한다. `.env`가 없으면 생성만 하고 값 입력을 안내한다. 수동 절차는 아래 3.1~3.6.
 >
 > **샌드박스 이미지 선빌드(중요).** agent-runner는 스캔·설치·테스트 컨테이너를 런타임에 `vibeguard-sandbox:0.1` / `vibeguard-scan:0.1` 태그로 띄운다. compose는 이 이미지들을 빌드하지 않으므로 **반드시 기동 전에 미리 빌드**해야 한다(스크립트가 자동 처리). 이 단계가 빠지면 스캔 파이프라인이 이미지 없음으로 실패한다. 상세는 §7.
 
@@ -147,6 +147,9 @@ cp .env.example .env
 - **운영이면** `.env`에 `SPRING_PROFILES_ACTIVE=prod` 지정 (Swagger·상세 health 비노출).
 - **Supabase를 쓰면** `.env`에 `DB_URL/DB_USER/DB_PASSWORD` 지정. 안 쓰면 컨테이너 postgres가 기본.
 - **토큰 암호화 키**는 운영에서 반드시 교체: `openssl rand -base64 32` → `TOKEN_ENC_KEY`.
+- **Runner 콜백 키**도 반드시 교체: `openssl rand -hex 32` → `RUNNER_CALLBACK_SECRET`.
+- EC2 Docker 소켓 GID를 확인해 `.env`에 반영: `stat -c '%g' /var/run/docker.sock` → `DOCKER_GID`.
+- Vercel에는 `NEXT_PUBLIC_API_URL=https://<백엔드 도메인>`을 지정하고 재배포한다.
 
 ### 3.3 기동
 ```bash
@@ -172,13 +175,16 @@ PROD=1 bash scripts/deploy.sh
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 - Caddy가 Let's Encrypt 인증서를 자동 발급(첫 기동 시 수십 초). 발급된 인증서는 `caddy_data` 볼륨에 영속된다.
-- 프로덕션 오버레이는 api-server 호스트 포트(8088) 직접 노출을 닫고, 외부 진입을 Caddy(443)로만 제한한다.
+- 프로덕션 오버레이는 API(8088)·Runner(4000)·DB(5433)의 호스트 포트를 모두 닫고, 외부 진입을 Caddy(80/443)로만 제한한다.
 - 도메인이 아직 없으면(IP만) `infra/Caddyfile`의 안내대로 `tls internal`(자체 서명, 브라우저 경고)로 리허설 가능.
 
 ### 3.4 확인
 ```bash
-curl http://localhost:8088/actuator/health   # {"status":"UP"}
-# 개발 프로파일이면 Swagger: http://localhost:8088/swagger-ui.html
+# 로컬 기본 compose
+curl http://localhost:8088/actuator/health
+
+# EC2 프로덕션 오버레이
+curl https://<백엔드 도메인>/actuator/health
 ```
 
 ### 3.5 종료
@@ -192,13 +198,8 @@ docker compose down -v       # DB 볼륨까지 삭제 (초기화)
 **(a) 방화벽 / 클라우드 보안그룹 인바운드 개방**
 EC2는 기본적으로 외부 포트가 막혀 있어, 포트를 열지 않으면 브라우저·FE에서 접속되지 않는다.
 - **AWS EC2 (기본)**: 인스턴스의 **Security Group → Inbound rules**에 규칙 추가.
-  - 22/TCP(SSH, 내 IP로 제한 권장), 443/TCP(HTTPS 리버스 프록시), 필요 시 8088/TCP(api-server 직접 접근·디버깅용).
-  - 소스는 가능한 한 좁게(내 IP/CIDR). 데모 공개가 필요하면 443만 0.0.0.0/0으로 연다.
-```bash
-# (선택) OS 방화벽도 쓰면 ufw 예시 — 보통 EC2는 Security Group만으로 충분
-sudo ufw allow 8088/tcp
-```
-- postgres 포트(5433)는 **외부에 열지 않는다**(DB는 컨테이너 내부 통신만). Supabase를 쓰면 로컬 postgres 자체가 불필요.
+  - 22/TCP(SSH, 내 IP로 제한), 80/TCP(인증서 발급·HTTPS 리다이렉트), 443/TCP(HTTPS)를 연다.
+  - API(8088)·Runner(4000)·DB(5433)는 **외부에 열지 않는다**. 프로덕션 오버레이에서도 호스트 노출이 제거된다.
 
 **(b) GitHub OAuth App 콜백 URL**
 EC2 배포 시 콜백이 로컬이 아니라 백엔드 공개 도메인이어야 한다. GitHub OAuth App 설정에서:
@@ -210,22 +211,13 @@ FE가 Vercel(크로스 오리진)이면 세션 쿠키가 `SameSite=None; Secure`
 
 > **도메인이 필요하다.** Let's Encrypt는 공인 도메인에만 인증서를 발급하며 **EC2의 IP(또는 `*.amazonaws.com` 기본 DNS)로는 발급되지 않는다.** 백엔드용 도메인(예: `api.example.com`)을 하나 준비해 EC2의 Elastic IP로 A 레코드를 연결한다. (무료 도메인: DuckDNS 등 사용 가능.)
 
-EC2에서 Caddy 실행 (예: Docker):
+EC2에서는 저장소에 포함된 Caddy 오버레이로 실행한다.
 ```bash
-# Caddyfile — 백엔드 도메인을 api-server(호스트 8088)로 프록시, TLS 자동
-cat > Caddyfile <<'EOF'
-api.example.com {
-    reverse_proxy localhost:8088
-}
-EOF
-
-docker run -d --name caddy --network host \
-  -v "$PWD/Caddyfile:/etc/caddy/Caddyfile" \
-  -v caddy_data:/data -v caddy_config:/config \
-  caddy:2
+PROD=1 bash scripts/deploy.sh
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f caddy
 ```
 - Security Group Inbound에 **443/TCP(및 80/TCP — Let's Encrypt HTTP-01 챌린지용)** 를 연다.
-- 발급 후 FE는 `VITE_API_BASE_URL=https://api.example.com`으로 백엔드를 호출한다.
+- 발급 후 FE는 Vercel의 `NEXT_PUBLIC_API_URL=https://api.example.com`으로 백엔드를 호출한다.
 - 데모를 동일 오리진으로 하면 생략 가능하나, FE가 Vercel이므로 이번 구성에서는 **필수**다.
 
 ---
@@ -236,8 +228,9 @@ docker run -d --name caddy --network host \
 |---|---|---|---|
 | api-server | 8080 | **8088** | `.env` `API_HOST_PORT` |
 | postgres | 5432 | **5433** | `.env` `POSTGRES_HOST_PORT` |
+| agent-runner | 4000 | **4000** | `.env` `RUNNER_HOST_PORT` |
 
-> 호스트 기본 포트를 8088/5433으로 둔 이유: 로컬에 8080/5432를 쓰는 다른 프로세스가 흔해 충돌을 피하려는 것. 컨테이너 간 통신(api-server→postgres)은 내부 네트워크의 5432를 쓰므로 호스트 포트와 무관하다. 깨끗한 VM이라면 8080/5432로 바꿔도 된다.
+> 위 호스트 포트는 로컬 기본 compose에서만 사용한다. `docker-compose.prod.yml`을 적용하면 세 포트 모두 제거되고 Caddy의 80/443만 노출된다.
 
 ---
 
@@ -250,8 +243,8 @@ docker run -d --name caddy --network host \
 | `POSTGRES_DB/USER/PASSWORD` | vibeguard | 컨테이너 postgres 초기화값 |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | changeme | GitHub OAuth (필수) |
 | `TOKEN_ENC_KEY` | dev 기본값 | 토큰 암호화 키(운영 필수 교체) |
-| `CORS_ALLOWED_ORIGINS` | localhost:5173 | FE 배포 도메인 — 운영값 `https://vibeguard-mu.vercel.app` |
-| `POST_LOGIN_URI` | localhost:5173/dashboard | 로그인 후 리다이렉트 — 운영값 `https://vibeguard-mu.vercel.app/dashboard` |
+| `CORS_ALLOWED_ORIGINS` | localhost:3000 | FE 배포 도메인 — 운영값 `https://vibeguard-mu.vercel.app` |
+| `POST_LOGIN_URI` | localhost:3000/dashboard | 로그인 후 리다이렉트 — 운영값 `https://vibeguard-mu.vercel.app/dashboard` |
 | `RUNNER_BASE_URL` / `RUNNER_CALLBACK_SECRET` | agent-runner:4000 / dev-secret | 런너 HMAC 연동 (api-server·agent 동일) |
 | `ANTHROPIC_API_KEY` | (없음) | Claude Agent SDK. 없으면 런너 골격 모드(실제 분석 없음) |
 | `DOCKER_GID` | 999 | agent-runner가 호스트 Docker 소켓에 접근하기 위한 그룹 GID. 호스트와 불일치 시 소켓 EACCES. 설정: `echo "DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)" >> .env` |

@@ -410,7 +410,7 @@ MoSCoW 우선순위. **M = MVP 필수(대회 제출 기준선)**
 
 ## 9. API 명세 (Spring Boot)
 
-Base: `/api/v1` · 인증: 세션 쿠키 (HttpOnly, SameSite=Lax)
+Base: `/api/v1` · 인증: 세션 쿠키 (HttpOnly; 로컬 Lax, 크로스 사이트 운영 `SameSite=None; Secure`)
 
 | Method | Endpoint | 설명 | 응답 |
 |---|---|---|---|
