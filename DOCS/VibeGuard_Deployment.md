@@ -63,6 +63,70 @@ docker --version && docker compose version   # 설치 확인
 
 ---
 
+## 2.5 AWS EC2 준비 (처음부터 — 실인스턴스 배포 테스트용)
+
+EC2 인스턴스를 새로 만들고 접속·배포 준비까지 하는 전체 절차다. AWS 콘솔(브라우저)과 로컬 터미널을 오간다.
+
+### (1) 리전·인스턴스 생성 (콘솔)
+1. AWS 콘솔 → 리전을 **ap-northeast-2(서울)** 로 선택(지연 최소).
+2. EC2 → **Launch instance**.
+   - **Name**: `vibeguard-demo`
+   - **AMI**: Ubuntu Server 24.04 LTS (x86_64)
+   - **Instance type**: `t3.small`(2GB, 권장) — 프리티어만 쓰려면 `t3.micro`(1GB, 스왑 필수)
+   - **Key pair**: 새로 생성(`vibeguard-key`) → **`.pem` 다운로드**(재발급 불가, 안전 보관)
+   - **Network settings → Security group**: 새로 만들고 아래 인바운드 규칙(2번 항목)
+   - **Storage**: gp3 20GB 이상(도커 이미지·Trivy DB 여유)
+3. **Launch instance** → 몇 분 후 running.
+
+### (2) 보안 그룹 인바운드 규칙
+EC2 → 인스턴스 → Security → Security groups → Inbound rules 편집:
+
+| Type | Port | Source | 용도 |
+|---|---|---|---|
+| SSH | 22 | **내 IP(My IP)** | 접속 (전체 개방 금지) |
+| HTTPS | 443 | 0.0.0.0/0 | FE·브라우저 접속(Caddy TLS) |
+| Custom TCP | 8088 | 내 IP | (선택) api-server 직접 디버깅 |
+
+> DB 포트(5433)는 열지 않는다. HTTP(80)는 Caddy가 자동 HTTPS 리다이렉트/인증서 발급에 쓰므로 도메인을 붙일 때만 함께 연다.
+
+### (3) 탄력적 IP 고정 (권장)
+EC2 → Elastic IPs → **Allocate** → 인스턴스에 **Associate**. 재부팅해도 IP가 안 바뀌어 OAuth 콜백 URL이 유지된다.
+
+### (4) SSH 접속 (로컬 터미널)
+```bash
+chmod 400 vibeguard-key.pem                       # 키 권한(최초 1회)
+ssh -i vibeguard-key.pem ubuntu@<EC2_PUBLIC_IP>   # Ubuntu AMI 기본 사용자: ubuntu
+```
+
+### (5) 인스턴스 초기 세팅
+```bash
+sudo apt-get update && sudo apt-get upgrade -y
+# Docker 설치 (위 §2 스크립트와 동일)
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER && newgrp docker
+docker --version && docker compose version
+
+# (t3.micro 등 1GB 인스턴스) 스왑 4GB — 메모리 부족 방지
+sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+free -h   # Swap 확인
+```
+
+### (6) 소스 가져오기 → 배포는 §3
+```bash
+git clone https://github.com/peachoath/vibeguard.git && cd vibeguard
+# 이후 §3.2 환경변수 설정 → §3.3 기동 (원클릭: bash scripts/deploy.sh)
+```
+
+> **배포 후 필수 확인(§3.6):** GitHub OAuth 콜백 URL을 `https://<도메인 또는 EC2_IP>/login/oauth2/code/github`로, `.env`의 `CORS_ALLOWED_ORIGINS`·`POST_LOGIN_URI`를 FE(Vercel) 실제 도메인으로 맞춘다. 크로스 오리진 세션 쿠키 때문에 **HTTPS 필수** — 앞단 Caddy로 TLS 종단.
+
+### (7) 비용·정리 (실테스트 종료 시)
+- 인스턴스를 **Stop**하면 컴퓨팅 과금은 멈추지만 EBS·Elastic IP(미연결 시) 요금은 계속될 수 있다.
+- 테스트가 끝나면 **Terminate**로 인스턴스 삭제 + 미사용 Elastic IP **Release**로 과금 방지.
+
+---
+
 ## 3. 배포 절차
 
 > **원클릭:** 저장소 루트에서 `bash scripts/deploy.sh` — `.env` 확인 → **샌드박스 이미지 빌드** → compose 빌드·기동 → 헬스 대기까지 자동(5단계). `.env`가 없으면 생성만 하고 값 입력을 안내한다. 수동 절차는 아래 3.1~3.6.
