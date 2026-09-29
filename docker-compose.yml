@@ -16,6 +16,7 @@ services:
   postgres:
     image: postgres:16
     container_name: vibeguard-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-vibeguard}
       POSTGRES_USER: ${POSTGRES_USER:-vibeguard}
