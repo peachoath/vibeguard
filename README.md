@@ -14,7 +14,7 @@ GitHub 리포지토리를 연결하면 AI 에이전트가 **취약 라이브러�
   <img alt="Frontend" src="https://img.shields.io/badge/FE-React_19_+_Vite-61DAFB?logo=react&logoColor=black">
   <img alt="Backend" src="https://img.shields.io/badge/BE-Spring_Boot_4_/_Java_21-6DB33F?logo=springboot&logoColor=white">
   <img alt="Agent" src="https://img.shields.io/badge/Agent-Node_22_+_Claude_SDK-339933?logo=nodedotjs&logoColor=white">
-  <img alt="DB" src="https://img.shields.io/badge/DB-Supabase_PostgreSQL_16-3ECF8E?logo=supabase&logoColor=white">
+  <img alt="DB" src="https://img.shields.io/badge/DB-PostgreSQL_16-4169E1?logo=postgresql&logoColor=white">
   <img alt="Deploy" src="https://img.shields.io/badge/FE_Deploy-Vercel-000000?logo=vercel&logoColor=white">
 </p>
 
@@ -95,7 +95,7 @@ Agent Runner를 Spring Boot에서 분리한 이유와 서브에이전트 MCP 제
 | 티어 | 스택 |
 |---|---|
 | **FE** | React 19 · TypeScript 5 · Vite · TanStack Query v5 · Zustand · Tailwind v4 + shadcn/ui · Vitest + Testing Library + MSW |
-| **BE/api-server** | Spring Boot 4.0.8 · Java 21 · Gradle (Kotlin DSL) · Spring Security + OAuth2 · Spring Data JPA + QueryDSL · Flyway · **Supabase PostgreSQL 16** · springdoc-openapi |
+| **BE/api-server** | Spring Boot 4.0.8 · Java 21 · Gradle (Kotlin DSL) · Spring Security + OAuth2 · Spring Data JPA + QueryDSL · Flyway · **PostgreSQL 16** · springdoc-openapi |
 | **BE/agent** | Node 22 · TypeScript · `@anthropic-ai/claude-agent-sdk` · `@modelcontextprotocol/sdk` · zod · Express |
 
 ---
@@ -108,11 +108,14 @@ Agent Runner를 Spring Boot에서 분리한 이유와 서브에이전트 MCP 제
 
 ### 0. 환경변수
 
-`.env`는 **각 컴포넌트 폴더 안**에 둡니다(루트 통합 `.env` 없음 — 각 런타임이 자기 폴더만 읽습니다). 각 폴더의 `.env.example`을 `.env`로 복사해 채우세요.
+로컬 단독 실행은 각 컴포넌트의 `.env`를 사용하고, Docker Compose/EC2 배포는 저장소 루트의
+`.env`를 사용합니다. 실제 파일은 Git에 포함하지 않고 권한을 `600`으로 제한합니다.
 
 | 위치 | 담는 값 | 읽는 주체 |
 |---|---|---|
-| `BE/api-server/.env` | DB(Supabase), GitHub OAuth, 콜백 시크릿 | Spring Boot (부팅 시 자동 로드) |
+| 루트 `.env` | Compose DB·OAuth·암호화·Runner·CORS 설정 | Docker Compose / EC2 배포 |
+| 루트 `.duckdns.local` | DuckDNS 도메인·토큰 | EC2 시작 스크립트(IP 자동 갱신) |
+| `BE/api-server/.env` | 단독 실행용 DB·GitHub OAuth·콜백 시크릿 | Spring Boot (부팅 시 자동 로드) |
 | `BE/agent/.env` | `ANTHROPIC_API_KEY`, `NVD_API_KEY`, 런너 설정 | Node 런너 |
 | `FE/.env` | `VITE_*` (선택) | Vite |
 
@@ -121,9 +124,9 @@ cp BE/api-server/.env.example BE/api-server/.env   # DB는 Supabase Connect의 J
 cp BE/agent/.env.example      BE/agent/.env
 ```
 
-> DB는 **Supabase 관리형 PostgreSQL 16**. 스키마는 Spring Boot 부팅 시 Flyway가 자동 마이그레이션합니다.
-> 오프라인 로컬 개발이 필요하면 `docker compose up -d postgres`로 로컬 Postgres를 띄우고
-> `BE/api-server/.env`의 로컬 `DB_URL` 주석을 활성화하세요.
+> 현재 대회 데모는 EC2 내부 PostgreSQL 16 컨테이너를 사용하며 Flyway가 자동 마이그레이션합니다.
+> 배포 백엔드 Base URL은 `https://vibeguard1st.duckdns.org`입니다. Supabase는 관리형 DB가
+> 필요할 때 선택할 수 있습니다. 상세 절차는 [배포 가이드](./DOCS/VibeGuard_Deployment.md)를 따릅니다.
 
 ### 1. FE (웹)
 

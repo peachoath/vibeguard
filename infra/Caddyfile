@@ -5,7 +5,8 @@
 #       자동 발급/갱신하고, 내부 api-server(8080)로 프록시한다.
 #
 # 사용:
-#   - DNS A 레코드가 이 EC2의 퍼블릭 IP(Elastic IP 권장)를 가리켜야 자동 TLS가 발급된다.
+#   - DNS가 이 EC2의 퍼블릭 IP를 가리켜야 자동 TLS가 발급된다.
+#     현재는 scripts/aws/start-free-tier.sh가 DuckDNS를 자동 갱신한다.
 #   - 도메인은 .env의 DEPLOY_DOMAIN 으로 주입된다(compose가 이 파일을 마운트).
 #   - EC2 보안그룹 인바운드 80/443 TCP 개방 필요(HTTP-01 챌린지 + HTTPS).
 #

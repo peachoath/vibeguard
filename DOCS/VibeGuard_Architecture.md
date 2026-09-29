@@ -87,7 +87,7 @@ graph TB
         C3["③ 테스트 pytest<br/>네트워크 X(절대)"]
     end
 
-    DB[("Supabase<br/>PostgreSQL 16")]
+    DB[("PostgreSQL 16<br/>EC2 데모 / Supabase 선택")]
 
     FE -->|"REST /api/v1"| SEC
     FE -->|"SSE /scans/:id/stream"| SSE
@@ -110,7 +110,7 @@ graph TB
 | FE (Next.js) | 3000 | `/api` → :8080 프록시 |
 | API Server | 8080 | Swagger UI `/swagger-ui.html` |
 | Agent Runner | 4000 | `/health`, `/scans` |
-| PostgreSQL | 5432 | Supabase 세션 풀러 / 로컬 폴백 |
+| PostgreSQL | 5432 | 현재 EC2 Compose 내부망 / Supabase 선택 시 세션 풀러 |
 
 ---
 
@@ -371,7 +371,7 @@ mindmap
       Spring Security + OAuth2
       JPA + QueryDSL
       Flyway
-      Supabase PostgreSQL 16
+      PostgreSQL 16 (EC2 데모 / Supabase 선택)
     Agent
       Node 22 + TS (오케스트레이션)
       Python (샌드박스 러너)
@@ -395,19 +395,23 @@ flowchart LR
         CADDY[Caddy<br/>TLS 종단·리버스 프록시]
         APIc[api-server 컨테이너]
         AGENTc[agent-runner 컨테이너]
-        PGc[(postgres<br/>로컬 폴백)]
+        PGc[(postgres<br/>현재 데모 DB)]
     end
     VERCEL[[Vercel<br/>FE 분리 배포]]
-    SUPA[(Supabase<br/>PostgreSQL 16)]
+    SUPA[(Supabase<br/>선택 경로)]
 
     VERCEL -->|"REST + SSE (HTTPS)"| CADDY
     CADDY --> APIc
     APIc --> AGENTc
-    APIc --> SUPA
-    APIc -.->|오프라인 개발 시| PGc
+    APIc -->|현재 대회 데모| PGc
+    APIc -.->|관리형 DB 선택 시| SUPA
 ```
 
-> 데모는 AWS EC2 단일 인스턴스 + Docker Compose (PRD §12). FE(Vercel)가 크로스 오리진이라 세션 쿠키(`SameSite=None; Secure`)를 위해 앞단 Caddy가 TLS를 종단한다. 운영 DB는 Supabase 관리형, 완전 오프라인 개발 시에만 로컬 Postgres로 폴백.
+> 현재 검증된 대회 데모는 AWS EC2 단일 인스턴스 + Docker Compose (PRD §12)이며,
+> `postgres + api-server + agent-runner + Caddy`를 함께 구동한다. FE(Vercel)가 크로스 오리진이라
+> 세션 쿠키(`SameSite=None; Secure`)를 위해 Caddy가 TLS를 종단한다. 공개 API 주소는
+> `https://vibeguard1st.duckdns.org`이고 EC2 시작 시 DuckDNS가 새 공인 IP로 자동 갱신된다.
+> Supabase는 관리형 DB가 필요할 때 선택하는 경로다.
 
 ---
 

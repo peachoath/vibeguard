@@ -58,7 +58,7 @@ FE (React) ──REST + SSE──▶ BE/api-server (Spring Boot)
 | FE | React 19 + TS + Vite | 대시보드·실시간 진행·증거/Diff | 5173 (`/api`→8080 프록시) |
 | API Server | Spring Boot 4 / Java 21 | REST+SSE·OAuth·상태머신·DB | 8080 |
 | Agent Runner | Node 22 + TS | Claude SDK 런너 + MCP | 4000 |
-| DB | Supabase PostgreSQL 16 | 데이터 | 5432 (세션 풀러) |
+| DB | PostgreSQL 16 | 데이터 | 현재 EC2 Compose 내부망, Supabase는 선택 경로 |
 
 **두 핵심 설계 결정**
 - Agent Runner를 Spring Boot에서 분리: Claude SDK가 TS/Python만 지원 → 별도 Node 런너 + HTTP 위임 + HMAC 콜백.
@@ -168,7 +168,9 @@ QUEUED → CLONING → SCANNING(A1) → VERIFYING(A2) → REGRESSION_CHECK(A3) �
 
 ### BE (api-server)
 - Spring Boot 4.0.8 / Java 21 / Gradle Kotlin DSL. JPA + QueryDSL + Flyway.
-- **DB는 Supabase PostgreSQL 16**, 세션 풀러(5432) + `sslmode=require`(트랜잭션 풀러 6543 금지).
+- **현재 대회 데모 DB는 EC2 내부 PostgreSQL 16 컨테이너**이며 외부 포트를 열지 않는다.
+  Supabase를 선택할 때는 세션 풀러(5432) + `sslmode=require`를 사용한다(트랜잭션 풀러 6543 금지).
+- **배포 API 주소는 `https://vibeguard1st.duckdns.org`**. EC2 시작 스크립트가 바뀐 공인 IP를 DuckDNS에 자동 반영한다.
 - 인증: Spring Security + OAuth2(GitHub). 세션 쿠키, 미인증 API는 401.
 - 테스트: JUnit 5 + Testcontainers + MockMvc.
 

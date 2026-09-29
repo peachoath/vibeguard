@@ -6,7 +6,7 @@
 | 항목 | 내용 |
 |---|---|
 | 문서 버전 | **v2.0 (방향 전환: SCA·회귀 증거 반영)** |
-| 최종 수정 | 2026-09-10 |
+| 최종 수정 | **2026-09-29 (EC2·DuckDNS 실배포 검증 반영)** |
 | Base URL | `/api/v1` |
 | 인증 | 세션 쿠키 (HttpOnly; 로컬 Lax, 크로스 사이트 운영 `SameSite=None; Secure`) |
 | 직렬화 | JSON (UTF-8) |
@@ -23,8 +23,9 @@
 | 티어 | 배포 | 오리진(예) |
 |---|---|---|
 | **FE** | **Vercel** | `https://vibeguard-mu.vercel.app` (+ 프리뷰 `*.vercel.app`) |
-| **API Server** | **AWS EC2** (Docker Compose + Caddy TLS) | `https://<백엔드 도메인>` (Caddy가 Let's Encrypt 자동 TLS) |
-| **DB** | **Supabase 관리형 PostgreSQL 16** | Supavisor 세션 풀러(5432) + `sslmode=require` |
+| **API Server** | **AWS EC2** (Docker Compose + Caddy TLS) | `https://vibeguard1st.duckdns.org` |
+| **DB (현재 데모)** | **EC2 내부 PostgreSQL 16 컨테이너** | Compose 내부망 `postgres:5432`, 외부 미노출 |
+| **DB (선택 경로)** | Supabase 관리형 PostgreSQL 16 | Supavisor 세션 풀러(5432) + `sslmode=require` |
 
 - 개발 환경의 Next.js FE(`http://localhost:3000`)도 API 절대 URL을 사용하므로 해당 오리진을 CORS 화이트리스트에 둔다.
 - 배포 환경에선 FE(Vercel)와 API(별도 도메인)가 **크로스 오리진**이 된다. 따라서 API Server는 다음을 설정해야 한다.
@@ -33,7 +34,7 @@
   - 세션 쿠키: 크로스 사이트 전송을 위해 **`SameSite=None; Secure`** 필요(운영). Lax는 동일 사이트 배포일 때만.
 - 프리플라이트(`OPTIONS`) 허용 메서드: `GET, POST, PATCH, DELETE, OPTIONS`.
 
-> 주의: 크로스 오리진 쿠키 인증은 `SameSite=None; Secure`가 강제되므로 HTTPS 필수. FE 오리진은 `https://vibeguard-mu.vercel.app`이며, 백엔드는 EC2 앞단 **Caddy 리버스 프록시가 Let's Encrypt로 자동 TLS**를 처리한다(도메인 필요). CORS 화이트리스트는 `CORS_ALLOWED_ORIGINS` 환경변수로 관리한다.
+> 주의: 크로스 오리진 쿠키 인증은 `SameSite=None; Secure`가 강제되므로 HTTPS 필수. FE 오리진은 `https://vibeguard-mu.vercel.app`이며, 백엔드는 EC2 앞단 **Caddy 리버스 프록시가 Let's Encrypt로 자동 TLS**를 처리한다. DuckDNS는 EC2 시작 시 새 공인 IP로 자동 갱신한다. CORS 화이트리스트는 `CORS_ALLOWED_ORIGINS` 환경변수로 관리한다.
 
 ### 1.2 인증 흐름
 
@@ -376,24 +377,27 @@ Agent Runner가 파이프라인 이벤트를 서버로 전달. **HMAC-SHA256 서
 
 | 위치 | 키 | 용도 |
 |---|---|---|
-| `BE/api-server/.env` | `DB_URL`,`DB_USER`,`DB_PASSWORD` | **Supabase** 세션 풀러(5432)+`sslmode=require` |
+| Compose 루트 `.env`(EC2 권한 `600`) | `POSTGRES_PASSWORD` | 현재 데모 로컬 DB 암호. `DB_PASSWORD` 미지정 시 API가 같은 값 상속 |
+| | `DB_URL`,`DB_USER`,`DB_PASSWORD` | Supabase를 선택할 때만 세션 풀러(5432)+`sslmode=require` 값 지정 |
 | | `GITHUB_CLIENT_ID/SECRET` | GitHub OAuth |
 | | `TOKEN_ENC_KEY` | 토큰 AES-256-GCM 키(base64 32B) |
 | | `RUNNER_BASE_URL`,`RUNNER_CALLBACK_SECRET` | 런너 위임/콜백 HMAC |
-| `BE/agent/.env` | `ANTHROPIC_API_KEY`,`NVD_API_KEY`,`RUNNER_CALLBACK_SECRET` | 런너/MCP |
-| Vercel 환경변수 | `NEXT_PUBLIC_API_URL` | 배포 API 오리진 (절대경로) |
+| | `ANTHROPIC_API_KEY`,`DRY_RUN` | 실제 Claude 분석 키 / 무과금 통합 리허설 모드 |
+| 로컬 전용 `.duckdns.local`(권한 `600`) | `DUCKDNS_DOMAIN`,`DUCKDNS_TOKEN` | EC2 시작 시 DuckDNS IP 자동 갱신. Git 제외 |
+| Vercel 환경변수 | `NEXT_PUBLIC_API_URL` | `https://vibeguard1st.duckdns.org` (`/api/v1` 제외) |
 
 > **FE 배포(Vercel):** 배포 빌드는 `NEXT_PUBLIC_API_URL`로 API 절대 URL을 주입하고 요청에 `credentials: 'include'`를 붙여 세션 쿠키를 전송한다. `openapi-typescript` 타입 생성은 API의 `/v3/api-docs`를 소스로 유지.
 
 ---
 
-## 11. 구현 현황 (2026-09-09 기준)
+## 11. 구현 현황 (2026-09-29 기준)
 
 | 엔드포인트 | 상태 |
 |---|---|
 | OAuth 로그인 / `/auth/me` / `/auth/logout` | 구현됨 (`AuthController`, `SecurityConfig`, `CustomOAuth2UserService`) |
-| repositories / scans / findings / dashboard | 미구현 (PRD §14 마일스톤 W1 중반~W2 후반) |
-| SSE `/scans/{id}/stream` | 미구현 (W2 중반, D10~11) |
-| `/internal/runner/events` (HMAC) | 미구현 (W1 중반~, D3 이후) |
+| repositories / scans / findings / dashboard | 구현됨 (각 Controller/Service/Repository) |
+| SSE `/scans/{id}/stream` | 구현됨 (`SseHub`, Caddy `flush_interval -1`) |
+| `/internal/runner/events` (HMAC) | 구현됨 (`RunnerCallbackController`, timestamp/replay 검증 포함) |
+| 운영 배포 검증 | EC2 HTTPS + PostgreSQL + Runner DRY_RUN E2E 완료 |
 
 > 스키마·enum은 [PRD §6·§9·§10](./VibeGuard_PRD.md), 흐름은 [Architecture §4·§5](./VibeGuard_Architecture.md) 참조. 확정 스펙 원천은 배포 후 `/v3/api-docs`(OpenAPI)이며, 본 문서와 불일치 시 OpenAPI를 우선한다.

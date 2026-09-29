@@ -5,14 +5,14 @@
 
 | 항목 | 내용 |
 |---|---|
-| 문서 버전 | v1.3 · 2026-09-28 (배포 대상을 AWS EC2로 변경) |
-| 대상 | `BE/api-server` (Spring Boot 4 / Java 21) + PostgreSQL |
-| **배포 인프라(확정)** | **AWS EC2** + FE는 Vercel · DB는 Supabase |
+| 문서 버전 | **v1.4 · 2026-09-29 (EC2·DuckDNS 실배포 검증 반영)** |
+| 대상 | `BE/api-server` (Spring Boot 4 / Java 21) + `BE/agent` + PostgreSQL + Caddy |
+| **배포 인프라(확정)** | **AWS EC2** + DuckDNS/Caddy HTTPS · FE는 Vercel · 데모 DB는 EC2 로컬 PostgreSQL |
 | 관련 문서 | [PRD](./VibeGuard_PRD.md) · [Architecture](./VibeGuard_Architecture.md) · [Team Roles](./VibeGuard_Team_Roles.md) |
 
 > **배포 대상 확정 — AWS EC2.** api-server + agent-runner + 샌드박스 컨테이너 3종을 단일 EC2
-> 인스턴스에서 Docker Compose로 구동한다. FE는 Vercel, DB는 Supabase로 분리한다.
-> 실배포 작업은 방향 전환(v2) 코드 반영이 안정화된 뒤 진행한다(순서상 코드 우선).
+> 인스턴스에서 Docker Compose로 구동한다. FE는 Vercel에 두고, 현재 대회 데모 DB는 같은 EC2의
+> PostgreSQL 컨테이너를 사용한다. Supabase는 필요할 때 선택 가능한 관리형 DB 경로다.
 >
 > **인스턴스 선택(비용).** 프리티어는 `t2.micro`/`t3.micro`(1GB RAM, 12개월 무료)이지만, 스캐너·
 > 테스트 컨테이너를 돌리기에 **1GB는 빠듯**하다. 데모 안정성을 위해 **`t3.small`(2GB) 이상**을
@@ -35,7 +35,7 @@
 - **DB 선택지 2가지**
   - (A) 컨테이너 postgres — `.env`의 DB_URL 미설정 시 기본. 완전 오프라인·데모용.
   - (B) Supabase 관리형 — `.env`에 `DB_URL/DB_USER/DB_PASSWORD` 지정. 공유 개발·운영용.
-- **FE는 Vercel 분리 배포**, DB는 Supabase 권장. api-server + agent-runner를 VM의 Compose로 띄운다.
+- **FE는 Vercel 분리 배포**. 현재 검증된 대회 데모는 postgres + api-server + agent-runner + Caddy를 EC2 Compose로 띄운다.
 - **agent-runner**는 스캔·설치·테스트 샌드박스(컨테이너 3종, 방향 전환 v2)를 **호스트 Docker 소켓**을 통해 띄우므로 compose에서 소켓을 마운트한다(데모/신뢰 환경 한정, NFR-S1).
 
 ---
@@ -46,7 +46,8 @@
   - 프리티어(`t2.micro`/`t3.micro`, 1GB)로도 리허설은 가능하나 스왑 2~4GB 권장(§2 상단 비용 노트 참고).
   - 대안(리허설/오프라인용): 팀원 머신에서도 동일 Compose로 구동 가능.
 - GitHub OAuth App 1개 (Client ID/Secret) — 로그인용
-- (권장) 탄력적 IP(Elastic IP) 1개 — 재부팅 시 IP가 바뀌지 않게 고정하면 OAuth 콜백 URL이 유지된다.
+- 무료 DuckDNS 서브도메인 1개 — 현재 백엔드 주소는 `https://vibeguard1st.duckdns.org`.
+- Elastic IP는 사용하지 않는다. EC2 시작 시 `scripts/aws/start-free-tier.sh`가 DuckDNS를 새 공인 IP로 갱신한다.
 
 > EC2 표준 인스턴스는 x86_64(amd64)다. 샌드박스/회귀 테스트 컨테이너는 재현성을 위해
 > `--platform linux/amd64`로 고정한다(PRD §15 R2) — EC2에서는 네이티브 아키텍처와도 일치한다.
@@ -89,8 +90,24 @@ EC2 → 인스턴스 → Security → Security groups → Inbound rules 편집:
 
 > 프로덕션 오버레이는 API(8088)·Runner(4000)·DB(5433)의 호스트 포트 노출을 제거한다. 보안 그룹에도 이 포트들을 열지 않는다.
 
-### (3) 탄력적 IP 고정 (권장)
-EC2 → Elastic IPs → **Allocate** → 인스턴스에 **Associate**. 재부팅해도 IP가 안 바뀌어 OAuth 콜백 URL이 유지된다.
+### (3) 무료 고정 도메인 — DuckDNS (확정)
+
+Elastic IP는 공인 IPv4 비용을 피하기 위해 사용하지 않는다. DuckDNS에서 `vibeguard1st` 서브도메인을
+만들고 저장소 루트에 아래 로컬 전용 파일을 둔다. 실제 토큰은 채팅·Git·명령행에 붙여 넣지 않는다.
+
+```bash
+cp .duckdns.local.example .duckdns.local
+chmod 600 .duckdns.local
+# 편집기로 DUCKDNS_TOKEN 입력. .duckdns.local은 Git에서 제외된다.
+```
+
+```dotenv
+DUCKDNS_DOMAIN=vibeguard1st
+DUCKDNS_TOKEN=<로컬 파일에만 입력>
+```
+
+`CONFIRM_START=YES scripts/aws/start-free-tier.sh`를 실행하면 새 EC2 공인 IP를 DuckDNS에 자동 반영한다.
+따라서 EC2 IP가 바뀌어도 외부 백엔드 URL과 OAuth 콜백 URL은 바뀌지 않는다.
 
 ### (4) SSH 접속 (로컬 터미널)
 ```bash
@@ -119,11 +136,11 @@ git clone https://github.com/peachoath/vibeguard.git && cd vibeguard
 # 이후 §3.2 환경변수 설정 → §3.3 기동 (원클릭: bash scripts/deploy.sh)
 ```
 
-> **배포 후 필수 확인(§3.6):** GitHub OAuth 콜백 URL을 `https://<도메인 또는 EC2_IP>/login/oauth2/code/github`로, `.env`의 `CORS_ALLOWED_ORIGINS`·`POST_LOGIN_URI`를 FE(Vercel) 실제 도메인으로 맞춘다. 크로스 오리진 세션 쿠키 때문에 **HTTPS 필수** — 앞단 Caddy로 TLS 종단.
+> **배포 후 필수 확인(§3.6):** GitHub OAuth 콜백 URL을 `https://vibeguard1st.duckdns.org/login/oauth2/code/github`로, `.env`의 `CORS_ALLOWED_ORIGINS`·`POST_LOGIN_URI`를 FE(Vercel) 실제 도메인으로 맞춘다. 크로스 오리진 세션 쿠키 때문에 **HTTPS 필수** — 앞단 Caddy로 TLS 종단.
 
 ### (7) 비용·정리 (실테스트 종료 시)
-- 인스턴스를 **Stop**하면 컴퓨팅 과금은 멈추지만 EBS·Elastic IP(미연결 시) 요금은 계속될 수 있다.
-- 테스트가 끝나면 **Terminate**로 인스턴스 삭제 + 미사용 Elastic IP **Release**로 과금 방지.
+- 인스턴스를 **Stop**하면 컴퓨팅 사용은 멈추지만 EBS 저장 비용은 계속될 수 있다.
+- Elastic IP는 생성하지 않는다. 테스트가 완전히 끝나면 CloudFormation 스택을 삭제해 EC2·EBS·보안그룹을 함께 정리한다.
 
 ### (8) 무료 플랜 단기 리허설 경로
 
@@ -146,7 +163,7 @@ CONFIRM_FREE_PLAN_DEPLOY=YES scripts/aws/deploy-free-tier.sh
 - Elastic IP를 생성하지 않음
 - SSH는 실행 시점의 공인 IP `/32`로만 허용
 - API·Runner·DB 포트는 열지 않고 80/443만 공개
-- 부팅 6시간 뒤 자동 정지
+- 자동 정지 시간은 `AUTO_STOP_HOURS`로 지정. 현재 대회 데모 스택은 **부팅 2시간 뒤 자동 정지**
 - CloudFormation 삭제 시 EC2·루트 EBS·보안그룹 함께 제거
 
 공인 IPv4는 Elastic IP 여부와 관계없이 시간당 비용 항목이므로 테스트가 끝나면 정지만 하지 말고 스택을 삭제한다.
@@ -155,14 +172,16 @@ CONFIRM_FREE_PLAN_DEPLOY=YES scripts/aws/deploy-free-tier.sh
 # 잠시 보존하되 컴퓨팅·공인 IPv4 사용을 멈춤
 scripts/aws/stop-free-tier.sh
 
-# 다음 작업 때 재시작(공인 IP가 바뀜)
+# 다음 작업 때 재시작. .duckdns.local이 있으면 바뀐 공인 IP를 DuckDNS에 자동 반영
 CONFIRM_START=YES scripts/aws/start-free-tier.sh
 
 # 테스트가 완전히 끝났으면 EC2·EBS·보안그룹 삭제
 CONFIRM_DESTROY=YES scripts/aws/destroy-free-tier.sh
 ```
 
-> Elastic IP가 없으므로 정지 후 다시 시작하면 공인 IP가 바뀐다. 이 경로는 단기 리허설용이다. 대회 시연처럼 고정 도메인이 필요한 기간에만 Elastic IP를 별도로 검토한다.
+> Elastic IP가 없어 정지 후 재시작하면 공인 IP는 바뀐다. 하지만 시작 스크립트가 DuckDNS를 갱신하므로
+> 외부 URL `https://vibeguard1st.duckdns.org`는 유지된다. PostgreSQL·API·Runner·Caddy에는
+> `restart: unless-stopped`가 적용되어 Docker 기동 뒤 자동 복구된다.
 
 ---
 
@@ -195,10 +214,11 @@ cp .env.example .env
 ```
 - **운영이면** `.env`에 `SPRING_PROFILES_ACTIVE=prod` 지정 (Swagger·상세 health 비노출).
 - **Supabase를 쓰면** `.env`에 `DB_URL/DB_USER/DB_PASSWORD` 지정. 안 쓰면 컨테이너 postgres가 기본.
+- 로컬 PostgreSQL에서는 `DB_PASSWORD`를 따로 지정하지 않으면 api-server가 회전된 `POSTGRES_PASSWORD`를 자동 사용한다.
 - **토큰 암호화 키**는 운영에서 반드시 교체: `openssl rand -base64 32` → `TOKEN_ENC_KEY`.
 - **Runner 콜백 키**도 반드시 교체: `openssl rand -hex 32` → `RUNNER_CALLBACK_SECRET`.
 - EC2 Docker 소켓 GID를 확인해 `.env`에 반영: `stat -c '%g' /var/run/docker.sock` → `DOCKER_GID`.
-- Vercel에는 `NEXT_PUBLIC_API_URL=https://<백엔드 도메인>`을 지정하고 재배포한다.
+- Vercel에는 `NEXT_PUBLIC_API_URL=https://vibeguard1st.duckdns.org`을 지정하고 재배포한다. Base URL에 `/api/v1`은 붙이지 않는다.
 
 ### 3.3 기동
 ```bash
@@ -217,8 +237,8 @@ docker compose logs -f api-server # 부팅 로그
 
 **프로덕션(EC2 + HTTPS)으로 기동:** FE(Vercel)가 크로스 오리진이라 세션 쿠키에 HTTPS가 필수다. Caddy가 앞단에서 TLS를 종단하는 프로덕션 오버레이(`docker-compose.prod.yml`)를 함께 올린다.
 ```bash
-# .env 에 DEPLOY_DOMAIN(예: api.example.com), SPRING_PROFILES_ACTIVE=prod 지정
-# DNS A 레코드가 EC2 퍼블릭 IP(Elastic IP)를 가리키고, 보안그룹 80/443 개방 필요
+# .env 에 DEPLOY_DOMAIN=vibeguard1st.duckdns.org, SPRING_PROFILES_ACTIVE=prod 지정
+# DuckDNS가 EC2 퍼블릭 IP를 가리키고, 보안그룹 80/443 개방 필요
 PROD=1 bash scripts/deploy.sh
 # 또는 수동:
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
@@ -233,7 +253,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 curl http://localhost:8088/actuator/health
 
 # EC2 프로덕션 오버레이
-curl https://<백엔드 도메인>/actuator/health
+curl https://vibeguard1st.duckdns.org/actuator/health
 ```
 
 ### 3.5 종료
@@ -253,12 +273,14 @@ EC2는 기본적으로 외부 포트가 막혀 있어, 포트를 열지 않으�
 **(b) GitHub OAuth App 콜백 URL**
 EC2 배포 시 콜백이 로컬이 아니라 백엔드 공개 도메인이어야 한다. GitHub OAuth App 설정에서:
 - Authorization callback URL: `https://<백엔드 도메인>/login/oauth2/code/github`
+- 현재 확정값: `https://vibeguard1st.duckdns.org/login/oauth2/code/github`
 - `.env`의 `CORS_ALLOWED_ORIGINS`·`POST_LOGIN_URI`는 **FE(Vercel) 오리진 `https://vibeguard-mu.vercel.app`** 으로 지정.
 
 **(c) HTTPS — Caddy 리버스 프록시 + 도메인 (확정)**
 FE가 Vercel(크로스 오리진)이면 세션 쿠키가 `SameSite=None; Secure`여야 하므로 **api-server 앞단에 HTTPS가 필수**다. **Caddy**를 리버스 프록시로 두면 Let's Encrypt로 **자동 TLS**가 발급·갱신된다.
 
-> **도메인이 필요하다.** Let's Encrypt는 공인 도메인에만 인증서를 발급하며 **EC2의 IP(또는 `*.amazonaws.com` 기본 DNS)로는 발급되지 않는다.** 백엔드용 도메인(예: `api.example.com`)을 하나 준비해 EC2의 Elastic IP로 A 레코드를 연결한다. (무료 도메인: DuckDNS 등 사용 가능.)
+> **도메인이 필요하다.** 현재는 무료 DuckDNS `vibeguard1st.duckdns.org`를 사용한다. EC2 재시작으로
+> 공인 IP가 바뀌면 시작 스크립트가 DuckDNS 레코드를 자동 갱신하고, Caddy가 공개 인증서를 유지·갱신한다.
 
 EC2에서는 저장소에 포함된 Caddy 오버레이로 실행한다.
 ```bash
@@ -266,8 +288,54 @@ PROD=1 bash scripts/deploy.sh
 docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f caddy
 ```
 - Security Group Inbound에 **443/TCP(및 80/TCP — Let's Encrypt HTTP-01 챌린지용)** 를 연다.
-- 발급 후 FE는 Vercel의 `NEXT_PUBLIC_API_URL=https://api.example.com`으로 백엔드를 호출한다.
+- FE는 Vercel의 `NEXT_PUBLIC_API_URL=https://vibeguard1st.duckdns.org`으로 백엔드를 호출한다.
 - 데모를 동일 오리진으로 하면 생략 가능하나, FE가 Vercel이므로 이번 구성에서는 **필수**다.
+
+### 3.7 현재 실배포 상태와 발표 당일 Runbook (2026-09-29 검증)
+
+| 항목 | 현재 값 |
+|---|---|
+| GitHub 저장소 | `https://github.com/peachoath/vibeguard` |
+| EC2 체크아웃 경로 | `/opt/vibeguard` |
+| 배포 브랜치 | `docs/deploy-target-ec2` (PR #50) |
+| 백엔드 Base URL | `https://vibeguard1st.duckdns.org` |
+| FE 오리진 | `https://vibeguard-mu.vercel.app` |
+| DB | EC2 내부 PostgreSQL 16 컨테이너 |
+| 외부 공개 포트 | Caddy 80/443만 공개 |
+| 테스트 모드 | `DRY_RUN=1` — Anthropic 호출 비용 없음 |
+| 자동 정지 | 현재 스택은 부팅 2시간 후 |
+
+검증 완료 항목:
+
+- PostgreSQL·api-server·agent-runner 모두 Docker health `healthy`
+- Caddy/Let's Encrypt 공개 인증서 발급 및 HTTPS health `200 UP`
+- HTTP→HTTPS `308`, 운영 Swagger `401`
+- Vercel 오리진 CORS 및 `Access-Control-Allow-Credentials: true`
+- API→Runner HMAC→callback→DB 전체 DRY_RUN `COMPLETED`, Agent run 4건 기록
+- 테스트용 DB 행은 검증 직후 삭제
+
+현재 테스트 모드는 임의의 OAuth 기동값과 `DRY_RUN=1`을 사용한다. 따라서 **인프라·백엔드 통합은
+검증 완료**지만 실제 GitHub 로그인과 Claude 분석은 회전된 운영 시크릿을 연결하기 전까지 비활성이다.
+
+발표 당일에는 최소 1시간, 권장 1.5~2시간 전에 아래 순서로 준비한다.
+
+```bash
+# 1) EC2 시작 + DuckDNS 자동 갱신
+CONFIRM_START=YES scripts/aws/start-free-tier.sh
+
+# 2) 출력된 IP로 접속해 최신 GitHub 코드 반영
+ssh -i ~/.ssh/vibeguard-demo.pem ubuntu@<출력된_PUBLIC_IP>
+cd /opt/vibeguard
+git pull --ff-only origin docs/deploy-target-ec2
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+
+# 3) 외부 HTTPS 확인
+curl https://vibeguard1st.duckdns.org/actuator/health
+```
+
+발표가 2시간을 넘기거나 사전 리허설 시간이 길면 시작 전에 CloudFormation의 자동 정지 시간을
+발표 종료 이후로 조정한다. 사용이 끝나면 `scripts/aws/stop-free-tier.sh`로 즉시 정지한다.
 
 ---
 
@@ -288,14 +356,15 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f caddy
 | 변수 | 기본 | 설명 |
 |---|---|---|
 | `SPRING_PROFILES_ACTIVE` | (없음) | `prod`면 운영 안전값. 비우면 개발 기본(Swagger 노출) |
-| `DB_URL` / `DB_USER` / `DB_PASSWORD` | 컨테이너 postgres | Supabase 사용 시 지정 |
-| `POSTGRES_DB/USER/PASSWORD` | vibeguard | 컨테이너 postgres 초기화값 |
+| `DB_URL` / `DB_USER` / `DB_PASSWORD` | 컨테이너 postgres | Supabase 사용 시 지정. 로컬 DB에서 `DB_PASSWORD` 미지정 시 `POSTGRES_PASSWORD` 상속 |
+| `POSTGRES_DB/USER/PASSWORD` | vibeguard | 컨테이너 postgres 초기화값. 운영에서는 비밀번호 필수 회전 |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | changeme | GitHub OAuth (필수) |
 | `TOKEN_ENC_KEY` | dev 기본값 | 토큰 암호화 키(운영 필수 교체) |
 | `CORS_ALLOWED_ORIGINS` | localhost:3000 | FE 배포 도메인 — 운영값 `https://vibeguard-mu.vercel.app` |
 | `POST_LOGIN_URI` | localhost:3000/dashboard | 로그인 후 리다이렉트 — 운영값 `https://vibeguard-mu.vercel.app/dashboard` |
 | `RUNNER_BASE_URL` / `RUNNER_CALLBACK_SECRET` | agent-runner:4000 / dev-secret | 런너 HMAC 연동 (api-server·agent 동일) |
 | `ANTHROPIC_API_KEY` | (없음) | Claude Agent SDK. 없으면 런너 골격 모드(실제 분석 없음) |
+| `DRY_RUN` | 0 | `1`이면 Anthropic 호출 없이 Agent 1~4 목 출력으로 통합 흐름 검증 |
 | `DOCKER_GID` | 999 | agent-runner가 호스트 Docker 소켓에 접근하기 위한 그룹 GID. 호스트와 불일치 시 소켓 EACCES. 설정: `echo "DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)" >> .env` |
 
 ---
@@ -308,7 +377,9 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f caddy
 - 로깅 INFO / SQL WARN
 - **DB 커넥션 풀(HikariCP)**: Supabase 세션 풀러 대비 작은 풀(`DB_POOL_MAX` 기본 5, `DB_POOL_MIN` 1), `max-lifetime` 30분. 무료 티어 커넥션 상한을 넘지 않게 조정 가능.
 
-> 검증(2026-09-28): 로컬 postgres에 `SPRING_PROFILES_ACTIVE=prod`로 기동 → 부팅 성공, `/actuator/health` UP, `/swagger-ui.html` 비노출(401) 확인. Supabase로 바꾸려면 `.env`의 `DB_URL`만 세션 풀러(5432)+`?sslmode=require` 값으로 교체하면 된다.
+> 검증(2026-09-29): EC2 로컬 postgres에 `SPRING_PROFILES_ACTIVE=prod`로 실배포 → HTTPS health 200/UP,
+> HTTP→HTTPS 308, Swagger 401, Vercel CORS credentials 허용, API→Runner HMAC→callback→DB DRY_RUN 완료를 확인했다.
+> Supabase로 바꾸려면 `.env`의 `DB_URL/DB_USER/DB_PASSWORD`를 세션 풀러(5432)+`?sslmode=require` 값으로 교체한다.
 
 > HTTPS·도메인·리버스 프록시(Nginx 등)는 VM 앞단에서 처리한다. FE가 크로스 오리진(Vercel)이면 세션 쿠키가 `SameSite=None; Secure`여야 하므로 **HTTPS가 필수**다.
 
@@ -356,5 +427,6 @@ docker build --platform linux/amd64 -t vibeguard-scan:0.1 \
 |---|---|
 | `Bind for 0.0.0.0:8080 failed: port is already allocated` | 호스트 포트 충돌 → `.env`의 `API_HOST_PORT`/`POSTGRES_HOST_PORT` 변경 |
 | api-server가 계속 `health: starting` | 부팅 40s+ 소요 정상(start_period 40s). 로그로 Flyway/DB 연결 확인 |
+| `password authentication failed for user "vibeguard"` | 로컬 DB 암호 불일치. 최신 compose는 `DB_PASSWORD` 미지정 시 `POSTGRES_PASSWORD`를 상속한다. 최신 코드 pull 후 컨테이너 재생성 |
 | `FlywayValidateException` | 엔티티와 스키마 불일치 → DB 마이그레이션(V*.sql) 확인. `down -v`로 초기화 후 재기동 |
 | Supabase 연결 실패 | `DB_URL`에 `?sslmode=require`, 세션 풀러(5432) 사용 확인(트랜잭션 풀러 6543 금지) |
