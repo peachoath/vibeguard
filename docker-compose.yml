@@ -45,7 +45,9 @@ services:
       # DB: 기본은 컨테이너 내 postgres. Supabase로 붙이려면 .env에서 DB_URL 등을 오버라이드.
       DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/vibeguard}
       DB_USER: ${DB_USER:-vibeguard}
-      DB_PASSWORD: ${DB_PASSWORD:-vibeguard}
+      # 관리형 DB 비밀번호가 없으면 로컬 postgres의 회전된 비밀번호를 그대로 사용한다.
+      # 두 기본값이 따로 놀면 POSTGRES_PASSWORD 회전 후 API 인증이 실패한다.
+      DB_PASSWORD: ${DB_PASSWORD:-${POSTGRES_PASSWORD:-vibeguard}}
       # GitHub OAuth (필수 — .env에 실제 값 지정)
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-changeme}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-changeme}
