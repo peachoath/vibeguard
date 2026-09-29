@@ -391,21 +391,23 @@ mindmap
 
 ```mermaid
 flowchart LR
-    subgraph VM["단일 VM (Docker Compose)"]
+    subgraph EC2["AWS EC2 단일 인스턴스 (Docker Compose)"]
+        CADDY[Caddy<br/>TLS 종단·리버스 프록시]
         APIc[api-server 컨테이너]
         AGENTc[agent-runner 컨테이너]
         PGc[(postgres<br/>로컬 폴백)]
     end
-    VERCEL[[Vercel<br/>FE 분리 배포 가능]]
+    VERCEL[[Vercel<br/>FE 분리 배포]]
     SUPA[(Supabase<br/>PostgreSQL 16)]
 
-    VERCEL -->|REST + SSE| APIc
+    VERCEL -->|"REST + SSE (HTTPS)"| CADDY
+    CADDY --> APIc
     APIc --> AGENTc
     APIc --> SUPA
     APIc -.->|오프라인 개발 시| PGc
 ```
 
-> 데모는 단일 VM + Docker Compose (PRD §12). 운영 DB는 Supabase 관리형, 완전 오프라인 개발 시에만 로컬 Postgres로 폴백.
+> 데모는 AWS EC2 단일 인스턴스 + Docker Compose (PRD §12). FE(Vercel)가 크로스 오리진이라 세션 쿠키(`SameSite=None; Secure`)를 위해 앞단 Caddy가 TLS를 종단한다. 운영 DB는 Supabase 관리형, 완전 오프라인 개발 시에만 로컬 Postgres로 폴백.
 
 ---
 

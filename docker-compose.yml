@@ -16,6 +16,7 @@ services:
   postgres:
     image: postgres:16
     container_name: vibeguard-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-vibeguard}
       POSTGRES_USER: ${POSTGRES_USER:-vibeguard}
@@ -45,16 +46,18 @@ services:
       # DB: 기본은 컨테이너 내 postgres. Supabase로 붙이려면 .env에서 DB_URL 등을 오버라이드.
       DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/vibeguard}
       DB_USER: ${DB_USER:-vibeguard}
-      DB_PASSWORD: ${DB_PASSWORD:-vibeguard}
+      # 관리형 DB 비밀번호가 없으면 로컬 postgres의 회전된 비밀번호를 그대로 사용한다.
+      # 두 기본값이 따로 놀면 POSTGRES_PASSWORD 회전 후 API 인증이 실패한다.
+      DB_PASSWORD: ${DB_PASSWORD:-${POSTGRES_PASSWORD:-vibeguard}}
       # GitHub OAuth (필수 — .env에 실제 값 지정)
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-changeme}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-changeme}
       # 토큰 암호화 키(AES-256-GCM, base64 32B). 운영에선 반드시 교체.
       TOKEN_ENC_KEY: ${TOKEN_ENC_KEY:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
       # CORS 허용 오리진 (FE 배포 도메인)
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
       # 로그인 성공 후 리다이렉트 URL
-      POST_LOGIN_URI: ${POST_LOGIN_URI:-http://localhost:5173/dashboard}
+      POST_LOGIN_URI: ${POST_LOGIN_URI:-http://localhost:3000/dashboard}
       # Agent Runner 연동 (HMAC). agent-runner 통합 시 base-url을 컨테이너명으로.
       RUNNER_BASE_URL: ${RUNNER_BASE_URL:-http://agent-runner:4000}
       RUNNER_CALLBACK_SECRET: ${RUNNER_CALLBACK_SECRET:-dev-secret-change-me}
@@ -79,6 +82,9 @@ services:
     environment:
       # Claude Agent SDK (필수 — .env에 실제 키 지정). 미설정 시 런너는 골격 모드로 동작.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # 로컬/배포 리허설에서 Claude API 비용 없이 전체 상태 흐름을 검증.
+      DRY_RUN: ${DRY_RUN:-0}
+      AGENT_MAX_BUDGET_USD: ${AGENT_MAX_BUDGET_USD:-0.5}
       # 서버로의 HMAC 콜백 대상. 컨테이너 네트워크에서 api-server를 서비스명으로 참조.
       API_BASE_URL: ${AGENT_API_BASE_URL:-http://api-server:8080}
       # 콜백 서명 키 — api-server의 RUNNER_CALLBACK_SECRET과 동일해야 함(NFR-S4).

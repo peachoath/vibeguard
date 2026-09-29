@@ -164,7 +164,7 @@ QUEUED → CLONING → SCANNING(A1) → VERIFYING(A2) → REGRESSION_CHECK(A3) �
 - 테스트 Vitest + Testing Library + MSW.
 - **API 타입은 수기 정의 금지.** `npm run typegen`(openapi-typescript, `/v3/api-docs` 소스)으로 생성.
 - SSE는 커스텀 훅(`useScanStream`)으로 감싸고 수신 시 TanStack Query 캐시를 `setQueryData`로 갱신, 재연결 지수 백오프.
-- **배포는 Vercel:** dev의 `/api` 프록시가 없으므로 `VITE_API_BASE_URL` 주입 + 요청에 `credentials:'include'`.
+- **배포는 Vercel:** `NEXT_PUBLIC_API_URL` 주입 + 요청에 `credentials:'include'`.
 
 ### BE (api-server)
 - Spring Boot 4.0.8 / Java 21 / Gradle Kotlin DSL. JPA + QueryDSL + Flyway.

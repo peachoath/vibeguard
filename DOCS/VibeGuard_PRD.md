@@ -410,7 +410,7 @@ MoSCoW 우선순위. **M = MVP 필수(대회 제출 기준선)**
 
 ## 9. API 명세 (Spring Boot)
 
-Base: `/api/v1` · 인증: 세션 쿠키 (HttpOnly, SameSite=Lax)
+Base: `/api/v1` · 인증: 세션 쿠키 (HttpOnly; 로컬 Lax, 크로스 사이트 운영 `SameSite=None; Secure`)
 
 | Method | Endpoint | 설명 | 응답 |
 |---|---|---|---|
@@ -640,7 +640,7 @@ VibeGuard가 "AI가 올린 버전을 왜 믿을 수 있는가"에 답하는 4개
 | MCP | 공식 GitHub MCP Server + 자체 제작 3종 |
 | 컨테이너 | Docker + Docker Compose (샌드박스 3종: 스캔/설치/테스트) |
 | CI | GitHub Actions |
-| 배포 | 데모: 단일 VM(Docker Compose). 프론트는 Vercel 분리 배포 가능 |
+| 배포 | 데모: **AWS EC2** 단일 인스턴스(Docker Compose). 프론트는 Vercel 분리 배포 |
 
 ---
 

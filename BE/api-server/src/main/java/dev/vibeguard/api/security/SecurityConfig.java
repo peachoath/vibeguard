@@ -24,9 +24,9 @@ public class SecurityConfig {
 
     /**
      * 로그인 성공 후 이동할 URL. 기본값 "/"(prod: FE·BE 동일 오리진).
-     * dev에서는 FE dev 서버가 별도 포트(:5173)이므로 .env의 POST_LOGIN_URI로
-     * http://localhost:5173/dashboard 처럼 절대 URL을 지정한다.
-     * 세션 쿠키는 host 기준(포트 무관)이라 :5173에서도 그대로 인증된다.
+     * dev에서는 FE dev 서버가 별도 포트(:3000)이므로 .env의 POST_LOGIN_URI로
+     * http://localhost:3000/dashboard 처럼 절대 URL을 지정한다.
+     * 세션 쿠키는 host 기준(포트 무관)이라 :3000에서도 그대로 인증된다.
      */
     private final String postLoginUri;
 
@@ -65,7 +65,8 @@ public class SecurityConfig {
             // 미인증 API 요청은 302 리다이렉트 대신 401 반환
             .exceptionHandling(ex -> ex.authenticationEntryPoint(
                 new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
-            // 세션 쿠키 기반. 데모 단계라 CSRF는 비활성(추후 SameSite=Lax + CSRF 토큰 도입).
+            // 세션 쿠키 기반. 데모 단계라 CSRF는 비활성(운영 쿠키는 prod 프로파일에서
+            // SameSite=None; Secure 적용, 이후 CSRF 토큰 도입 필요).
             .csrf(csrf -> csrf.disable());
 
         return http.build();

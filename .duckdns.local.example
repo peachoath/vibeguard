@@ -1,0 +1,4 @@
+# 이 파일을 .duckdns.local로 복사하고 chmod 600을 적용한다.
+# 실제 토큰 파일은 *.local 규칙으로 Git에 포함되지 않는다.
+DUCKDNS_DOMAIN=vibeguard1st
+DUCKDNS_TOKEN=

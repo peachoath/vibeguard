@@ -30,9 +30,11 @@ ENV NODE_ENV=production
 #   - git      : 대상 리포 클론 (Agent가 스캔할 저장소를 가져옴)
 #   - python3  : 샌드박스 CLI 실행 (testrunner-mcp가 sandbox/.venv/bin/python cli.py 호출)
 #   - docker.io: docker CLI만 필요(데몬 불필요). 컨테이너 3종은 호스트 소켓으로 띄운다
+#   - wget     : Docker Compose /health 점검
 # 한 레이어로 설치하고 apt 캐시 제거(이미지 경량화).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git \
+        wget \
         python3 python3-venv \
         docker.io \
     && rm -rf /var/lib/apt/lists/*

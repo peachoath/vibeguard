@@ -45,3 +45,15 @@ logging:
     root: INFO
     dev.vibeguard: INFO
     org.hibernate.SQL: WARN
+
+# Caddy에서 TLS를 종료하므로 외부 요청의 원래 scheme/host를 전달 헤더로 복원한다.
+# OAuth2 redirect URI가 http://api-server:8080 으로 생성되는 것을 방지한다.
+server:
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      cookie:
+        # FE(Vercel)와 API(EC2 도메인)는 cross-site이므로 인증 세션 전송에 필수.
+        same-site: none
+        secure: true
+        http-only: true

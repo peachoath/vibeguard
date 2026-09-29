@@ -1,0 +1,12 @@
+# 로컬 스모크 전용 런타임 이미지.
+# scripts/local-smoke.sh가 호스트 Gradle 캐시로 bootJar를 만든 뒤 이 이미지는 JAR만 복사한다.
+FROM eclipse-temurin:21-jre-jammy
+WORKDIR /app
+
+RUN groupadd --system app && useradd --system --gid app --home /app app
+COPY build/libs/*-SNAPSHOT.jar app.jar
+
+USER app
+EXPOSE 8080
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0"
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

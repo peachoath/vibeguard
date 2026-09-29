@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: VibeGuard short-lived EC2 demo with cost guardrails (no Elastic IP)
+
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Existing EC2 key pair for SSH
+  SSHCidr:
+    Type: String
+    Description: Current administrator public IP in /32 CIDR form
+    AllowedPattern: '^(?:\d{1,3}\.){3}\d{1,3}/32$'
+  InstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues: [t3.micro, t3.small]
+  AutoStopHours:
+    Type: Number
+    Default: 6
+    MinValue: 1
+    MaxValue: 24
+  GitBranch:
+    Type: String
+    Default: docs/deploy-target-ec2
+    AllowedPattern: '^[A-Za-z0-9._/-]+$'
+  UbuntuAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+
+Resources:
+  VibeGuardSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: VibeGuard demo - SSH from one IP, public HTTP/HTTPS
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHCidr
+          Description: Restricted SSH
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Caddy HTTP challenge and redirect
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Caddy HTTPS
+      Tags:
+        - Key: Project
+          Value: VibeGuard
+        - Key: CostGuard
+          Value: ShortLivedDemo
+
+  VibeGuardInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref UbuntuAmi
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SecurityGroupIds: [!GetAtt VibeGuardSecurityGroup.GroupId]
+      InstanceInitiatedShutdownBehavior: stop
+      Monitoring: false
+      CreditSpecification:
+        CPUCredits: standard
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: vibeguard-demo
+        - Key: Project
+          Value: VibeGuard
+        - Key: CostGuard
+          Value: !Sub 'AutoStop-${AutoStopHours}h'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/usr/bin/env bash
+          set -euxo pipefail
+          exec > >(tee /var/log/vibeguard-bootstrap.log | logger -t user-data -s 2>/dev/console) 2>&1
+
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl git jq
+          curl -fsSL https://get.docker.com | sh
+          usermod -aG docker ubuntu
+
+          if [ ! -f /swapfile ]; then
+            fallocate -l 4G /swapfile
+            chmod 600 /swapfile
+            mkswap /swapfile
+            swapon /swapfile
+            echo '/swapfile none swap sw 0 0' >> /etc/fstab
+          fi
+
+          install -d -m 0750 -o 1000 -g 1000 /srv/vibeguard/work /srv/vibeguard/cache
+          if [ ! -d /opt/vibeguard/.git ]; then
+            git clone --depth 1 --branch '${GitBranch}' https://github.com/peachoath/vibeguard.git /opt/vibeguard
+          fi
+          chown -R ubuntu:ubuntu /opt/vibeguard
+
+          cat >/etc/systemd/system/vibeguard-auto-stop.service <<'EOF'
+          [Unit]
+          Description=Stop VibeGuard demo EC2 instance to limit credit usage
+          [Service]
+          Type=oneshot
+          ExecStart=/sbin/shutdown -h now
+          EOF
+
+          cat >/etc/systemd/system/vibeguard-auto-stop.timer <<'EOF'
+          [Unit]
+          Description=Automatically stop VibeGuard demo instance
+          [Timer]
+          OnBootSec=${AutoStopHours}h
+          Unit=vibeguard-auto-stop.service
+          [Install]
+          WantedBy=timers.target
+          EOF
+          systemctl daemon-reload
+          systemctl enable --now vibeguard-auto-stop.timer
+
+Outputs:
+  InstanceId:
+    Value: !Ref VibeGuardInstance
+  PublicIp:
+    Value: !GetAtt VibeGuardInstance.PublicIp
+  PublicDnsName:
+    Value: !GetAtt VibeGuardInstance.PublicDnsName
+  AutoStopHours:
+    Value: !Ref AutoStopHours
+  Note:
+    Value: No Elastic IP is created; the public IP changes after stop/start.
