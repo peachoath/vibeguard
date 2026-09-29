@@ -79,6 +79,9 @@ services:
     environment:
       # Claude Agent SDK (필수 — .env에 실제 키 지정). 미설정 시 런너는 골격 모드로 동작.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # 로컬/배포 리허설에서 Claude API 비용 없이 전체 상태 흐름을 검증.
+      DRY_RUN: ${DRY_RUN:-0}
+      AGENT_MAX_BUDGET_USD: ${AGENT_MAX_BUDGET_USD:-0.5}
       # 서버로의 HMAC 콜백 대상. 컨테이너 네트워크에서 api-server를 서비스명으로 참조.
       API_BASE_URL: ${AGENT_API_BASE_URL:-http://api-server:8080}
       # 콜백 서명 키 — api-server의 RUNNER_CALLBACK_SECRET과 동일해야 함(NFR-S4).

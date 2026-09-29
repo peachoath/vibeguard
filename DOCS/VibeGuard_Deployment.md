@@ -125,6 +125,38 @@ git clone https://github.com/peachoath/vibeguard.git && cd vibeguard
 - 인스턴스를 **Stop**하면 컴퓨팅 과금은 멈추지만 EBS·Elastic IP(미연결 시) 요금은 계속될 수 있다.
 - 테스트가 끝나면 **Terminate**로 인스턴스 삭제 + 미사용 Elastic IP **Release**로 과금 방지.
 
+### (8) 무료 플랜 단기 리허설 경로
+
+AWS 계정 생성 시점에 따라 무료 정책이 다르므로 인스턴스부터 만들지 않는다. 먼저 읽기 전용 점검을 실행한다.
+
+```bash
+scripts/aws/free-tier-preflight.sh
+```
+
+무료 플랜이 `ACTIVE`이고 크레딧이 충분할 때만 아래 자동화를 사용한다.
+
+```bash
+CONFIRM_FREE_PLAN_DEPLOY=YES scripts/aws/deploy-free-tier.sh
+```
+
+기본 안전값:
+
+- 서울 리전 `t3.small`(x86_64) + 암호화 gp3 20GiB
+- T3 CPU 크레딧 `standard` — surplus CPU 과금 방지
+- Elastic IP를 생성하지 않음
+- SSH는 실행 시점의 공인 IP `/32`로만 허용
+- API·Runner·DB 포트는 열지 않고 80/443만 공개
+- 부팅 6시간 뒤 자동 정지
+- CloudFormation 삭제 시 EC2·루트 EBS·보안그룹 함께 제거
+
+공인 IPv4는 Elastic IP 여부와 관계없이 시간당 비용 항목이므로 테스트가 끝나면 정지만 하지 말고 스택을 삭제한다.
+
+```bash
+CONFIRM_DESTROY=YES scripts/aws/destroy-free-tier.sh
+```
+
+> Elastic IP가 없으므로 정지 후 다시 시작하면 공인 IP가 바뀐다. 이 경로는 단기 리허설용이다. 대회 시연처럼 고정 도메인이 필요한 기간에만 Elastic IP를 별도로 검토한다.
+
 ---
 
 ## 3. 배포 절차
@@ -132,6 +164,16 @@ git clone https://github.com/peachoath/vibeguard.git && cd vibeguard
 > **원클릭:** 저장소 루트에서 `PROD=1 bash scripts/deploy.sh` — `.env` 및 운영 필수값 검증 → 작업·캐시 경로 준비 → **샌드박스 이미지 빌드** → compose 빌드·기동 → 헬스 대기까지 자동 처리한다. `.env`가 없으면 생성만 하고 값 입력을 안내한다. 수동 절차는 아래 3.1~3.6.
 >
 > **샌드박스 이미지 선빌드(중요).** agent-runner는 스캔·설치·테스트 컨테이너를 런타임에 `vibeguard-sandbox:0.1` / `vibeguard-scan:0.1` 태그로 띄운다. compose는 이 이미지들을 빌드하지 않으므로 **반드시 기동 전에 미리 빌드**해야 한다(스크립트가 자동 처리). 이 단계가 빠지면 스캔 파이프라인이 이미지 없음으로 실패한다. 상세는 §7.
+
+### 3.0 로컬 비용 없는 통합 리허설
+
+Docker Desktop을 실행한 뒤 아래 스크립트를 사용한다. 실제 `.env`를 읽지 않고 임시 키·로컬 DB를 만들며, `DRY_RUN=1`로 Claude API 호출 없이 API→Runner→HMAC callback→DB 상태 전이를 확인한다. 완료 후 컨테이너·볼륨·임시 키는 자동 삭제된다.
+
+```bash
+bash scripts/local-smoke.sh
+```
+
+디버깅을 위해 컨테이너를 남기려면 `KEEP_SMOKE=1 bash scripts/local-smoke.sh`를 사용한다.
 
 ### 3.1 저장소 클론
 ```bash

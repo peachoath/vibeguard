@@ -1,0 +1,28 @@
+# 로컬 통합 스모크 테스트 전용 오버레이.
+# 모든 포트를 loopback에만 바인딩하고, 실제 .env 대신 scripts/local-smoke.sh가
+# 생성한 임시 환경파일과 작업 디렉터리를 사용한다.
+services:
+  postgres:
+    container_name: vibeguard-smoke-postgres
+    ports: !override
+      - '127.0.0.1:${POSTGRES_HOST_PORT:-15433}:5432'
+
+  api-server:
+    container_name: vibeguard-smoke-api
+    build:
+      context: ./BE/api-server
+      dockerfile: Dockerfile.local-smoke
+    ports: !override
+      - '127.0.0.1:${API_HOST_PORT:-18088}:8080'
+
+  agent-runner:
+    container_name: vibeguard-smoke-runner
+    ports: !override
+      - '127.0.0.1:${RUNNER_HOST_PORT:-14000}:4000'
+    volumes: !override
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${VIBEGUARD_HOST_ROOT:?set VIBEGUARD_HOST_ROOT}:${VIBEGUARD_HOST_ROOT:?set VIBEGUARD_HOST_ROOT}
+
+volumes:
+  pgdata:
+    name: ${SMOKE_PG_VOLUME:-vibeguard-smoke-pgdata}

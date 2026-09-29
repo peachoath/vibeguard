@@ -8,6 +8,7 @@ Thumbs.db
 *.local
 # .env 내용을 RTF로 저장한 파일에 실제 시크릿이 들어가는 사고 방지 (커밋 금지)
 *.rtf
+*.pem
 
 # ---- Node (FE, BE/agent) ----
 node_modules/
