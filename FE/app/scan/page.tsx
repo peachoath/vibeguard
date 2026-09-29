@@ -3,17 +3,11 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
-import { apiFetch, apiSseUrl } from "@/lib/api";
-
-interface ScanDto {
-  id: string;
-  repositoryId: string;
-  ref: string;
-  status: string;
-}
+import { apiFetch, apiSseUrl, ApiError } from "@/lib/api";
+import { useStartScan, type ScanDto } from "@/lib/queries";
 
 interface SseStageEvent {
   scanId: string;
@@ -30,11 +24,6 @@ interface SseLogEvent {
   payload: { level: string; message: string; ts: string };
 }
 
-interface SseDoneEvent {
-  scanId: string;
-  kind: "done";
-  status?: string;
-}
 
 const STAGE_ORDER = ["CLONING", "SCANNING", "VERIFYING", "REGRESSION_CHECK", "PR_CREATING"];
 const STAGE_LABELS: Record<string, string> = {
@@ -47,7 +36,6 @@ const STAGE_LABELS: Record<string, string> = {
 
 function ScanContent() {
   const params = useSearchParams();
-  const router = useRouter();
   const repoId = params.get("repoId");
   const ref = params.get("ref") ?? "main";
 
@@ -56,34 +44,30 @@ function ScanContent() {
   const [stageStatus, setStageStatus] = useState<Record<string, string>>({});
   const [logs, setLogs] = useState<{ ts: string; agent: number; level: string; message: string }[]>([]);
   const [done, setDone] = useState(false);
-  const [finalStatus, setFinalStatus] = useState("");
   const [error, setError] = useState("");
+  const [reconnecting, setReconnecting] = useState(false);
+  const [streamLost, setStreamLost] = useState(false);
   const esRef = useRef<EventSource | null>(null);
   const activityListRef = useRef<HTMLDivElement>(null);
+  const doneRef = useRef(false);
+  const retriesRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startScan = useStartScan();
 
-  useEffect(() => {
-    if (!repoId) { setError("저장소 정보가 없습니다."); return; }
+  const MAX_SSE_RETRIES = 6;
 
-    apiFetch<ScanDto>("/api/v1/scans", {
-      method: "POST",
-      body: JSON.stringify({ repositoryId: repoId, ref }),
-    })
-      .then((s) => {
-        setScan(s);
-        subscribeStream(s.id);
-      })
-      .catch((e) => setError(e.message));
-
-    return () => esRef.current?.close();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repoId, ref]);
-
-  function subscribeStream(scanId: string) {
+  const subscribeStream = (scanId: string) => {
     // SseHub.broadcast()는 named events(event: stage, event: log, event: done)를 전송한다.
     // EventSource.onmessage는 unnamed events(event 헤더 없음)에만 반응하므로
     // 반드시 addEventListener로 각 이벤트를 수신해야 한다.
     const es = new EventSource(apiSseUrl(`/api/v1/scans/${scanId}/stream`), { withCredentials: true });
     esRef.current = es;
+
+    es.onopen = () => {
+      // 연결(재)성립 — 재시도 카운터/배너 초기화.
+      retriesRef.current = 0;
+      setStreamLost(false);
+    };
 
     es.addEventListener("stage", (e: MessageEvent) => {
       const evt: SseStageEvent = JSON.parse(e.data);
@@ -103,18 +87,65 @@ function ScanContent() {
       }
     });
 
-    es.addEventListener("done", (e: MessageEvent) => {
-      const evt: SseDoneEvent = JSON.parse(e.data);
+    es.addEventListener("done", () => {
+      doneRef.current = true;
       setDone(true);
-      setFinalStatus(evt.status ?? "COMPLETED");
       es.close();
     });
 
     es.onerror = () => {
-      // 연결 오류 시 닫기. 재연결은 브라우저 기본 동작에 맡기지 않고 명시적으로 차단.
+      // 브라우저 기본 재연결을 막고 직접 지수 백오프로 재시도.
+      // 재접속 시 백엔드는 종료 상태면 즉시 done을, 진행 중이면 이후 이벤트를 보내 자연 복구된다.
       es.close();
+      if (doneRef.current) return;
+      if (retriesRef.current >= MAX_SSE_RETRIES) {
+        setError("실시간 연결이 계속 끊깁니다. 네트워크를 확인하고 새로고침 해주세요.");
+        return;
+      }
+      const delay = Math.min(1000 * 2 ** retriesRef.current, 8000);
+      retriesRef.current += 1;
+      setStreamLost(true);
+      reconnectTimerRef.current = setTimeout(() => subscribeStream(scanId), delay);
     };
-  }
+  };
+
+  useEffect(() => {
+    if (!repoId) return;
+
+    startScan.mutateAsync({ repositoryId: repoId, ref })
+      .then((s) => {
+        setScan(s);
+        subscribeStream(s.id);
+      })
+      .catch((e) => {
+        if (e instanceof ApiError && e.status === 409) {
+          setReconnecting(true);
+          apiFetch<ScanDto[]>("/api/v1/scans")
+            .then((scans) => {
+              const TERMINAL = ["COMPLETED", "NO_FINDINGS", "PATCH_FAILED", "REGRESSION_BLOCKED", "FAILED", "AGENT_NOT_CONFIGURED", "MCP_NOT_AVAILABLE", "INSTALL_FAILED", "NO_TESTS"];
+              const active = scans.find(
+                (s) => s.repositoryId === repoId && s.ref === ref && !TERMINAL.includes(s.status),
+              );
+              setReconnecting(false);
+              if (active) {
+                setScan(active);
+                subscribeStream(active.id);
+              } else {
+                setError("이미 진행 중인 스캔을 찾을 수 없습니다.");
+              }
+            })
+            .catch(() => { setReconnecting(false); setError("이미 진행 중인 스캔을 찾을 수 없습니다."); });
+        } else {
+          setError(e.message);
+        }
+      });
+
+    return () => {
+      esRef.current?.close();
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoId, ref]);
 
   const stageIndex = STAGE_ORDER.indexOf(currentStage);
   const progress = done ? 100 : Math.min(95, Math.round(((stageIndex + 1) / STAGE_ORDER.length) * 100));
@@ -130,12 +161,24 @@ function ScanContent() {
     return () => cancelAnimationFrame(frame);
   }, [logs.length]);
 
-  if (error) {
+  if (reconnecting) {
     return (
       <main className="scan-page">
         <AppHeader active="scan" />
         <ScreenContent>
-          <p className="scan-error">{error}</p>
+          <p className="scan-error">이미 진행 중인 스캔이 있습니다. 연결 중…</p>
+        </ScreenContent>
+      </main>
+    );
+  }
+
+  const shownError = !repoId ? "저장소 정보가 없습니다." : error;
+  if (shownError) {
+    return (
+      <main className="scan-page">
+        <AppHeader active="scan" />
+        <ScreenContent>
+          <p className="scan-error">{shownError}</p>
           <Link href="/repositories">저장소로 돌아가기</Link>
         </ScreenContent>
       </main>
@@ -156,6 +199,13 @@ function ScanContent() {
             <Link href="/repositories">전체 저장소</Link>
           </div>
         </section>
+
+        {streamLost && !done && (
+          <p className="scan-reconnect-banner" role="status">
+            <span className="scan-reconnect-dot" aria-hidden="true" />
+            실시간 연결이 끊겨 재연결 중입니다…
+          </p>
+        )}
 
         <div className="live-scan-layout">
           <div className="live-scan-main">

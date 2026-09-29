@@ -1,7 +1,7 @@
 'use client'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 
 function Toaster() {
   const [toasts, setToasts] = useState<Array<{ id: number; kind: 'success' | 'error' | 'info' | 'warn'; message: string }>>([])
@@ -16,11 +16,15 @@ function Toaster() {
     return () => window.removeEventListener('vg:toast', handler)
   }, [])
 
-  if (!toasts.length) return null
+  // 라이브 영역은 항상 렌더해야 동적으로 추가되는 토스트를 스크린리더가 낭독한다.
   return (
-    <div className="toaster" role="region" aria-label="알림">
+    <div className="toaster" role="region" aria-label="알림 목록" aria-live="polite" aria-atomic="false">
       {toasts.map((t) => (
-        <div key={t.id} className={`toast toast-${t.kind}`} role="status">
+        <div
+          key={t.id}
+          className={`toast toast-${t.kind}`}
+          role={t.kind === 'error' || t.kind === 'warn' ? 'alert' : 'status'}
+        >
           <span className="toast-msg">{t.message}</span>
           <button
             type="button"
@@ -59,17 +63,10 @@ function getQueryClient() {
 }
 
 export function Providers({ children }: { children: ReactNode }) {
-  const qc = useRef(getQueryClient())
-
-  useEffect(() => {
-    if (process.env.NEXT_PUBLIC_ENABLE_MOCKS !== 'true') return
-    import('@/mocks/browser').then(({ worker }) => {
-      worker.start({ onUnhandledRequest: 'bypass' })
-    })
-  }, [])
+  const [qc] = useState(getQueryClient)
 
   return (
-    <QueryClientProvider client={qc.current}>
+    <QueryClientProvider client={qc}>
       {children}
       <Toaster />
     </QueryClientProvider>

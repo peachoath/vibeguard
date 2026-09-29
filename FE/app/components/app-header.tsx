@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Settings } from "lucide-react";
+import { Search, Settings } from "lucide-react";
 import DashboardNav from "./dashboard-nav";
 import { useAuth } from "./auth-provider";
 import { useRouter } from "next/navigation";
@@ -29,6 +29,15 @@ export default function AppHeader({ active }: { active: NavTab }) {
       <DashboardNav active={active} />
 
       <div className="account-area">
+        <button
+          type="button"
+          className="cmdk-trigger"
+          aria-label="빠른 이동 열기 (Command K)"
+          onClick={() => window.dispatchEvent(new Event("vg:cmdk"))}
+        >
+          <Search size={14} aria-hidden="true" />
+          <kbd>⌘K</kbd>
+        </button>
         <Link className="settings-button" href="/settings" aria-label="설정">
           <Settings size={21} />
         </Link>

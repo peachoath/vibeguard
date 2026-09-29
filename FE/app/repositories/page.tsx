@@ -1,53 +1,38 @@
 "use client";
 
-import { ChevronDown, ChevronsUpDown, Lock, Plus, Search, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronsUpDown, FolderGit2, Lock, Plus, Search, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { Sk } from "../components/skeleton";
 import { ErrorView } from "../components/error-view";
 import { toast } from "../components/providers";
 import Link from "next/link";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
-import { apiFetch } from "@/lib/api";
-
-interface Repository {
-  id: string;
-  fullName: string;
-  defaultBranch: string;
-  language: string | null;
-  connectedAt: string;
-}
-
-interface GitHubRepo {
-  githubRepoId: number;
-  fullName: string;
-  defaultBranch: string;
-  language: string | null;
-  isPrivate: boolean;
-}
+import { useFocusTrap } from "../components/use-focus-trap";
+import { EmptyState } from "../components/empty-state";
+import { useConnectRepo, useGithubRepos, useRepositories, type GitHubRepo } from "@/lib/queries";
 
 export default function RepositoriesPage() {
-  const [repos, setRepos] = useState<Repository[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const reposQuery = useRepositories();
+  const repos = useMemo(() => reposQuery.data ?? [], [reposQuery.data]);
+  const loading = reposQuery.isPending;
+  const error = reposQuery.isError;
+
   const [query, setQuery] = useState("");
   const [sortOrder, setSortOrder] = useState("default");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [scanBranch, setScanBranch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
-  const [githubRepos, setGithubRepos] = useState<GitHubRepo[]>([]);
-  const [addLoading, setAddLoading] = useState(false);
   const [addQuery, setAddQuery] = useState("");
   const [connecting, setConnecting] = useState<number | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  useFocusTrap(modalRef, addOpen);
 
-  useEffect(() => {
-    apiFetch<Repository[]>("/api/v1/repositories")
-      .then(setRepos)
-      .catch(() => { setError(true); setRepos([]); })
-      .finally(() => setLoading(false));
-  }, []);
+  const githubReposQuery = useGithubRepos(addOpen);
+  const githubRepos = useMemo(() => githubReposQuery.data ?? [], [githubReposQuery.data]);
+  const addLoading = addOpen && githubReposQuery.isPending;
+  const connectRepoMutation = useConnectRepo();
 
   const selected = repos.find((r) => r.id === selectedId) ?? repos[0] ?? null;
 
@@ -62,14 +47,7 @@ export default function RepositoriesPage() {
   function openAdd() {
     setAddOpen(true);
     setAddQuery("");
-    setAddLoading(true);
-    apiFetch<GitHubRepo[]>("/api/v1/repositories?source=github")
-      .then(setGithubRepos)
-      .catch(() => setGithubRepos([]))
-      .finally(() => {
-        setAddLoading(false);
-        setTimeout(() => searchRef.current?.focus(), 50);
-      });
+    // 초기 포커스는 useFocusTrap이 [data-autofocus](검색창)로 이동시킨다.
   }
 
   function closeAdd() {
@@ -80,11 +58,7 @@ export default function RepositoriesPage() {
   async function connectRepo(repo: GitHubRepo) {
     setConnecting(repo.githubRepoId);
     try {
-      const added = await apiFetch<Repository>("/api/v1/repositories", {
-        method: "POST",
-        body: JSON.stringify({ githubRepoId: repo.githubRepoId, fullName: repo.fullName, defaultBranch: repo.defaultBranch, language: repo.language }),
-      });
-      setRepos((prev) => [added, ...prev]);
+      await connectRepoMutation.mutateAsync(repo);
       closeAdd();
       toast.success(`${repo.fullName} 저장소가 연결되었습니다.`);
     } catch {
@@ -117,14 +91,18 @@ export default function RepositoriesPage() {
             className="add-repo-backdrop"
             onClick={(e) => { if (e.target === e.currentTarget) closeAdd(); }}
             onKeyDown={(e) => { if (e.key === "Escape") closeAdd(); }}
-            role="dialog"
-            aria-modal="true"
-            aria-label="GitHub 저장소 연결"
           >
-            <div className="add-repo-modal" ref={modalRef}>
+            <div
+              className="add-repo-modal"
+              ref={modalRef}
+              tabIndex={-1}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="add-repo-title"
+            >
               <div className="add-repo-header">
                 <div>
-                  <h2>GitHub 저장소 연결</h2>
+                  <h2 id="add-repo-title">GitHub 저장소 연결</h2>
                   <p>연결할 저장소를 선택하면 보안 검증 파이프라인에 추가됩니다.</p>
                 </div>
                 <button className="add-repo-close" onClick={closeAdd} aria-label="닫기">
@@ -136,6 +114,7 @@ export default function RepositoriesPage() {
                 <Search size={15} />
                 <input
                   ref={searchRef}
+                  data-autofocus
                   placeholder="저장소 이름으로 검색"
                   value={addQuery}
                   onChange={(e) => setAddQuery(e.target.value)}
@@ -226,7 +205,7 @@ export default function RepositoriesPage() {
                 </div>
               </div>
 
-              {error && !loading && <ErrorView onRetry={() => { setError(false); setLoading(true); apiFetch<Repository[]>("/api/v1/repositories").then(setRepos).catch(() => setError(true)).finally(() => setLoading(false)); }} />}
+              {error && !loading && <ErrorView onRetry={() => reposQuery.refetch()} />}
 
               <div className="repository-table" role="table">
                 <div className="repository-row repository-table-head" role="row">
@@ -238,7 +217,6 @@ export default function RepositoriesPage() {
                     <Sk w="58%" h={13} />
                     <Sk w="46%" h={13} />
                     <Sk w="52%" h={13} />
-                    <span />
                   </div>
                 ))}
                 {!loading && visible.map((r) => (
@@ -254,14 +232,12 @@ export default function RepositoriesPage() {
                   </button>
                 ))}
                 {!loading && repos.length === 0 && (
-                  <div className="empty-state">
-                    <svg className="empty-state-icon" width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
-                    </svg>
-                    <h3>연결된 저장소가 없습니다</h3>
-                    <p>GitHub 저장소를 연결하면 보안 파이프라인을 바로 시작할 수 있습니다.</p>
-                    <button className="empty-cta" onClick={openAdd}>저장소 연결하기</button>
-                  </div>
+                  <EmptyState
+                    icon={<FolderGit2 size={28} />}
+                    title="연결된 저장소가 없습니다"
+                    description="GitHub 저장소를 연결하면 보안 파이프라인을 바로 시작할 수 있습니다."
+                    action={<button className="empty-cta" onClick={openAdd}>저장소 연결하기</button>}
+                  />
                 )}
                 {!loading && repos.length > 0 && visible.length === 0 && (
                   <p className="repository-empty">&quot;{query}&quot;와 일치하는 저장소가 없습니다.</p>

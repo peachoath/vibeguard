@@ -1,35 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import AppHeader from "../../components/app-header";
 import ScreenContent from "../../components/screen-content";
-import { apiFetch } from "@/lib/api";
 import { Sk } from "../../components/skeleton";
 import { ErrorView } from "../../components/error-view";
+import { useFinding } from "@/lib/queries";
 
-interface FindingDetailDto {
-  id: string;
-  type: string;
-  ruleId: string | null;
-  cveId: string | null;
-  cweId: string | null;
-  severity: string;
-  cvssScore: number | null;
-  filePath: string | null;
-  lineStart: number | null;
-  lineEnd: number | null;
-  manifestPath: string | null;
-  packageName: string | null;
-  currentVersion: string | null;
-  recommendedVersion: string | null;
-  verdict: string;
-  status: string;
-  description: string | null;
-  remediationAdvice: string | null;
-  references: string[] | null;
-}
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
 const SEVERITY_LABELS: Record<string, string> = {
   CRITICAL: "치명적", HIGH: "높음", MEDIUM: "보통", LOW: "낮음",
@@ -41,21 +20,10 @@ const VERDICT_LABELS: Record<string, string> = {
 export default function FindingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [finding, setFinding] = useState<FindingDetailDto | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  function load() {
-    if (!id) return;
-    setLoading(true);
-    setError(false);
-    apiFetch<FindingDetailDto>(`/api/v1/findings/${id}`)
-      .then(setFinding)
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
-  }
-
-  useEffect(() => { load(); }, [id]);
+  const findingQuery = useFinding(id);
+  const finding = findingQuery.data ?? null;
+  const loading = findingQuery.isPending;
+  const error = findingQuery.isError;
 
   return (
     <main className="results-page">
@@ -92,7 +60,7 @@ export default function FindingDetailPage() {
           </div>
         )}
 
-        {error && !loading && <ErrorView onRetry={load} />}
+        {error && !loading && <ErrorView onRetry={() => findingQuery.refetch()} />}
 
         {finding && !loading && (
           <div className="finding-detail-card">
@@ -183,12 +151,12 @@ export default function FindingDetailPage() {
             )}
 
             <div className="finding-detail-actions">
-              <Link href={`/api/v1/findings/${id}/evidence`} target="_blank">
+              <a href={`${API_BASE}/api/v1/findings/${id}/evidence`} target="_blank" rel="noreferrer">
                 증거 JSON
-              </Link>
-              <Link href={`/api/v1/findings/${id}/diff`} target="_blank">
+              </a>
+              <a href={`${API_BASE}/api/v1/findings/${id}/diff`} target="_blank" rel="noreferrer">
                 Diff JSON
-              </Link>
+              </a>
               <Link href="/results">← 목록으로</Link>
             </div>
           </div>
