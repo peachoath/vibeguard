@@ -1,0 +1,5 @@
+*
+!Dockerfile.local-smoke
+!build/
+!build/libs/
+!build/libs/*-SNAPSHOT.jar

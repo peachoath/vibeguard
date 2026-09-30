@@ -1,0 +1,46 @@
+# BE/agent Docker 빌드 컨텍스트 제외 목록
+# 이미지 경량화 + 시크릿 유출 방지 (NFR-S3)
+
+# ── 의존성 / 빌드 산출물 (이미지 빌드 시 새로 설치·빌드) ──
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# ── 시크릿 / 환경변수 (컨테이너에 절대 넣지 않음) ──
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+
+# ── 샌드박스: 이미지엔 cli.py·runner.py·image/ 만 필요 ──
+# venv는 이미지 빌드 시 새로 생성, fixtures/artifacts는 런타임에 불필요(빌드 경량화)
+sandbox/.venv/
+sandbox/fixtures/
+sandbox/artifacts/
+
+# ── 로그 / 캐시 ──
+npm-debug.log*
+yarn-error.log*
+.npm/
+*.log
+
+# ── VCS / IDE / OS ──
+.git/
+.gitignore
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ── 문서 / 테스트 산출물 (런타임 이미지에 불필요) ──
+*.md
+coverage/
+**/coverage/
+
+# ── Docker 관련 파일 자체 ──
+Dockerfile
+.dockerignore

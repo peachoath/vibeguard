@@ -2,7 +2,8 @@
 
 import { Info, LockKeyhole, X } from "lucide-react";
 import Image from "next/image";
-import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
+import { useFocusTrap } from "./use-focus-trap";
 
 type LoginModalTriggerProps = {
   variant?: "header" | "primary";
@@ -13,6 +14,8 @@ const LoginModalContext = createContext<(() => void) | null>(null);
 
 export function LoginModalProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const dialogRef = useRef<HTMLElement>(null);
+  useFocusTrap(dialogRef, open);
 
   useEffect(() => {
     if (!open) return;
@@ -41,6 +44,8 @@ export function LoginModalProvider({ children }: { children: ReactNode }) {
         <div className="login-modal-overlay" onMouseDown={() => setOpen(false)}>
           <section
             className="login-dialog"
+            ref={dialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="login-title"
@@ -60,7 +65,7 @@ export function LoginModalProvider({ children }: { children: ReactNode }) {
             </div>
 
             <div className="login-dialog-actions">
-              <a className="login-oauth-button" href="https://github.com/login">연결하기</a>
+              <a className="login-oauth-button" href={`${process.env.NEXT_PUBLIC_API_URL}/oauth2/authorization/github`}>연결하기</a>
               <button type="button" className="login-cancel-button" onClick={() => setOpen(false)}>취소</button>
             </div>
 

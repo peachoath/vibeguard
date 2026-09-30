@@ -14,7 +14,7 @@ export default function PageTransition({ children }: { children: ReactNode }) {
       {hydrated && (
         <style>{`@media (prefers-reduced-motion: reduce) { .screen-content { transform: none !important; } }`}</style>
       )}
-      {children}
+      <div id="main-content" tabIndex={-1} className="app-main-target">{children}</div>
     </LayoutGroup>
   );
 }

@@ -1,31 +1,15 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Radar } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Sk } from "../components/skeleton";
 import { ErrorView } from "../components/error-view";
+import { EmptyState } from "../components/empty-state";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
-import { apiFetch } from "@/lib/api";
-
-interface ScanDto {
-  id: string;
-  repositoryId: string;
-  ref: string;
-  commitSha: string | null;
-  status: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-  durationMs: number | null;
-  errorCode: string | null;
-}
-
-interface Repository {
-  id: string;
-  fullName: string;
-}
+import { useRepositories, useScans } from "@/lib/queries";
 
 function statusTone(status: string): string {
   if (status === "COMPLETED") return "complete";
@@ -51,36 +35,29 @@ function formatDuration(ms: number | null): string {
 }
 
 export default function HistoryPage() {
-  const [scans, setScans] = useState<ScanDto[]>([]);
-  const [repoMap, setRepoMap] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const scansQuery = useScans();
+  const reposQuery = useRepositories();
   const [range, setRange] = useState("30");
   const [status, setStatus] = useState("all");
-  const [auditOpen, setAuditOpen] = useState(false);
+  // 페이지 진입 시각을 한 번만 고정 — 렌더 중 Date.now() 호출(비순수) 회피.
+  const [now] = useState(() => Date.now());
 
-  useEffect(() => {
-    Promise.all([
-      apiFetch<ScanDto[]>("/api/v1/scans"),
-      apiFetch<Repository[]>("/api/v1/repositories"),
-    ])
-      .then(([scanList, repos]) => {
-        setScans(scanList);
-        setRepoMap(Object.fromEntries(repos.map((r) => [r.id, r.fullName])));
-      })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
-  }, []);
+  const scans = useMemo(() => scansQuery.data ?? [], [scansQuery.data]);
+  const loading = scansQuery.isPending || reposQuery.isPending;
+  const error = scansQuery.isError || reposQuery.isError;
+  const repoMap = useMemo(
+    () => Object.fromEntries((reposQuery.data ?? []).map((r) => [r.id, r.fullName])),
+    [reposQuery.data],
+  );
 
-  const now = Date.now();
-  const rangeDays = parseInt(range, 10);
-
-  const visible = useMemo(() => scans
-    .filter((s) => {
+  const visible = useMemo(() => {
+    const rangeDays = parseInt(range, 10);
+    return scans.filter((s) => {
       if (status !== "all" && statusTone(s.status) !== status) return false;
       if (s.startedAt && (now - new Date(s.startedAt).getTime()) > rangeDays * 86_400_000) return false;
       return true;
-    }), [scans, status, range, now, rangeDays]);
+    });
+  }, [scans, status, range, now]);
 
   const summary = useMemo(() => ({
     complete: scans.filter((s) => s.status === "COMPLETED").length,
@@ -144,12 +121,10 @@ export default function HistoryPage() {
 
         <section className="history-timeline-card">
           <div className="history-card-heading">
-            <div><h2>스캔 타임라인</h2><p>완료·차단·증명 없음·설치 실패 등 종료 원인을 숨기지 않고 보존합니다.</p></div>
-            <button type="button" className={auditOpen ? "active" : ""} onClick={() => setAuditOpen((v) => !v)}>감사 로그 보기</button>
+            <div><h2>검사 타임라인</h2><p>완료·차단·증명 없음·설치 실패 등 종료 원인을 숨기지 않고 보존합니다.</p></div>
           </div>
-          {auditOpen && <p className="audit-message" role="status">모든 검사 상태 변경과 PR 생성 기록이 보존되고 있습니다.</p>}
 
-          {error && !loading && <ErrorView onRetry={() => { setError(false); window.location.reload(); }} />}
+          {error && !loading && <ErrorView onRetry={() => { scansQuery.refetch(); reposQuery.refetch(); }} />}
 
           <div className="history-timeline" tabIndex={0} aria-label="스캔 이력 목록">
             {loading && Array.from({ length: 4 }, (_, i) => (
@@ -179,13 +154,13 @@ export default function HistoryPage() {
             ))}
             {!loading && visible.length === 0 && (
               scans.length === 0 ? (
-                <div className="empty-state" style={{ alignSelf: "center" }}>
-                  <svg className="empty-state-icon" width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <h3>스캔 기록이 없습니다</h3>
-                  <p>저장소를 연결하고 스캔을 실행하면 이력이 쌓입니다.</p>
-                  <Link className="empty-cta" href="/repositories">저장소 관리</Link>
+                <div style={{ alignSelf: "center" }}>
+                  <EmptyState
+                    icon={<Radar size={28} />}
+                    title="아직 검사 기록이 없습니다"
+                    description="저장소를 연결하고 검사를 실행하면 이력이 쌓입니다."
+                    action={<Link className="empty-cta" href="/repositories">저장소로 이동</Link>}
+                  />
                 </div>
               ) : (
                 <p className="history-empty" style={{ alignSelf: "center" }}>선택한 조건의 검사 이력이 없습니다.</p>

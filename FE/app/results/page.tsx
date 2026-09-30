@@ -1,39 +1,16 @@
 "use client";
 
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, Search, ShieldCheck } from "lucide-react";
 import Image from "next/image";
 import { Sk } from "../components/skeleton";
 import { ErrorView } from "../components/error-view";
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
-import { apiFetch } from "@/lib/api";
-
-interface FindingDto {
-  id: string;
-  type: string;
-  ruleId: string | null;
-  cveId: string | null;
-  cweId: string | null;
-  severity: string;
-  cvssScore: number | null;
-  filePath: string | null;
-  lineStart: number | null;
-  lineEnd: number | null;
-  manifestPath: string | null;
-  packageName: string | null;
-  currentVersion: string | null;
-  recommendedVersion: string | null;
-  verdict: string;
-  status: string;
-}
-
-interface PageResponse {
-  content: FindingDto[];
-  totalElements: number;
-}
+import { EmptyState } from "../components/empty-state";
+import { useScanFindings, usePrefetch } from "@/lib/queries";
 
 const SEVERITY_LABELS: Record<string, string> = {
   CRITICAL: "치명적",
@@ -52,23 +29,16 @@ function ResultsContent() {
   const params = useSearchParams();
   const scanId = params.get("scanId");
 
-  const [data, setData] = useState<PageResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
   const [severity, setSeverity] = useState("all");
   const [verdict, setVerdict] = useState("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("score-desc");
 
-  useEffect(() => {
-    if (!scanId) { setLoading(false); return; }
-    apiFetch<PageResponse>(`/api/v1/scans/${scanId}/findings?size=100`)
-      .then(setData)
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
-  }, [scanId]);
-
-  const findings = data?.content ?? [];
+  const prefetch = usePrefetch();
+  const findingsQuery = useScanFindings(scanId);
+  const loading = !!scanId && findingsQuery.isPending;
+  const error = findingsQuery.isError;
+  const findings = useMemo(() => findingsQuery.data?.content ?? [], [findingsQuery.data]);
 
   const counts = useMemo(() => ({
     CRITICAL: findings.filter((f) => f.severity === "CRITICAL").length,
@@ -173,8 +143,8 @@ function ResultsContent() {
                 </div>
               </div>
 
-              {error && !loading && <ErrorView onRetry={() => { setError(false); setLoading(true); if (scanId) apiFetch<PageResponse>(`/api/v1/scans/${scanId}/findings?size=100`).then(setData).catch(() => setError(true)).finally(() => setLoading(false)); }} />}
-              {!scanId && !loading && <p className="findings-empty">스캔을 먼저 선택하세요. <Link href="/history">검사 이력 보기</Link></p>}
+              {error && !loading && <ErrorView onRetry={() => findingsQuery.refetch()} />}
+              {!scanId && !loading && <p className="findings-empty">검사를 먼저 선택하세요. <Link href="/history">검사 이력 보기</Link></p>}
 
               <div className="findings-table-wrap">
                 <table className="findings-table">
@@ -217,7 +187,7 @@ function ResultsContent() {
                           </span>
                         </td>
                         <td><span className={`finding-regression ${item.status.toLowerCase()}`}>{item.status}</span></td>
-                        <td><Link className="finding-detail-link" href={`/results/${item.id}`} scroll={false}>상세 보기 →</Link></td>
+                        <td><Link className="finding-detail-link" href={`/findings/${item.id}`} scroll={false} onMouseEnter={() => prefetch.finding(item.id)} onFocus={() => prefetch.finding(item.id)}>상세 보기 →</Link></td>
                       </tr>
                     ))}
                   </tbody>
@@ -226,13 +196,12 @@ function ResultsContent() {
                   <p className="findings-empty">조건에 맞는 Finding이 없습니다.</p>
                 )}
                 {!loading && findings.length === 0 && scanId && (
-                  <div className="empty-state">
-                    <svg className="empty-state-icon" width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.955 11.955 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                    </svg>
-                    <h3>취약점이 발견되지 않았습니다</h3>
-                    <p>이 스캔에서 모든 의존성이 안전합니다.</p>
-                  </div>
+                  <EmptyState
+                    tone="positive"
+                    icon={<ShieldCheck size={28} />}
+                    title="취약점이 발견되지 않았습니다"
+                    description="이 스캔에서 모든 의존성이 안전합니다."
+                  />
                 )}
               </div>
             </section>

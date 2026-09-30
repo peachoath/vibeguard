@@ -8,7 +8,7 @@
 | 문서 버전 | **v2.0 (방향 전환: SCA·회귀 증거 반영)** |
 | 최종 수정 | 2026-09-10 |
 | Base URL | `/api/v1` |
-| 인증 | 세션 쿠키 (HttpOnly, SameSite=Lax) |
+| 인증 | 세션 쿠키 (HttpOnly; 로컬 Lax, 크로스 사이트 운영 `SameSite=None; Secure`) |
 | 직렬화 | JSON (UTF-8) |
 | 에러 규격 | RFC 9457 Problem Details |
 | 스펙 소스 | springdoc-openapi → `/v3/api-docs` (FE `npm run typegen` 원본) |
@@ -22,18 +22,18 @@
 
 | 티어 | 배포 | 오리진(예) |
 |---|---|---|
-| **FE** | **Vercel** | `https://vibeguard.vercel.app` (+ 프리뷰 `*.vercel.app`) |
-| **API Server** | 단일 VM (Docker Compose) | `https://api.vibeguard.dev` |
+| **FE** | **Vercel** | `https://vibeguard-mu.vercel.app` (+ 프리뷰 `*.vercel.app`) |
+| **API Server** | **AWS EC2** (Docker Compose + Caddy TLS) | `https://<백엔드 도메인>` (Caddy가 Let's Encrypt 자동 TLS) |
 | **DB** | **Supabase 관리형 PostgreSQL 16** | Supavisor 세션 풀러(5432) + `sslmode=require` |
 
-- 개발 환경에선 Vite가 `/api` → `http://localhost:8080`로 프록시하므로 CORS가 필요 없다.
+- 개발 환경의 Next.js FE(`http://localhost:3000`)도 API 절대 URL을 사용하므로 해당 오리진을 CORS 화이트리스트에 둔다.
 - 배포 환경에선 FE(Vercel)와 API(별도 도메인)가 **크로스 오리진**이 된다. 따라서 API Server는 다음을 설정해야 한다.
   - `Access-Control-Allow-Origin`: Vercel 프로덕션 + 프리뷰 도메인 화이트리스트
   - `Access-Control-Allow-Credentials: true` (세션 쿠키 전송)
   - 세션 쿠키: 크로스 사이트 전송을 위해 **`SameSite=None; Secure`** 필요(운영). Lax는 동일 사이트 배포일 때만.
 - 프리플라이트(`OPTIONS`) 허용 메서드: `GET, POST, PATCH, DELETE, OPTIONS`.
 
-> 주의: 크로스 오리진 쿠키 인증은 `SameSite=None; Secure`가 강제되므로 HTTPS 필수. Vercel↔API 도메인 구성 확정 시 CORS 화이트리스트를 환경변수로 관리한다.
+> 주의: 크로스 오리진 쿠키 인증은 `SameSite=None; Secure`가 강제되므로 HTTPS 필수. FE 오리진은 `https://vibeguard-mu.vercel.app`이며, 백엔드는 EC2 앞단 **Caddy 리버스 프록시가 Let's Encrypt로 자동 TLS**를 처리한다(도메인 필요). CORS 화이트리스트는 `CORS_ALLOWED_ORIGINS` 환경변수로 관리한다.
 
 ### 1.2 인증 흐름
 
@@ -381,9 +381,9 @@ Agent Runner가 파이프라인 이벤트를 서버로 전달. **HMAC-SHA256 서
 | | `TOKEN_ENC_KEY` | 토큰 AES-256-GCM 키(base64 32B) |
 | | `RUNNER_BASE_URL`,`RUNNER_CALLBACK_SECRET` | 런너 위임/콜백 HMAC |
 | `BE/agent/.env` | `ANTHROPIC_API_KEY`,`NVD_API_KEY`,`RUNNER_CALLBACK_SECRET` | 런너/MCP |
-| `FE/.env` (**Vercel**) | `VITE_API_BASE_URL` | 배포 API 오리진 (프록시 대신 절대경로) |
+| Vercel 환경변수 | `NEXT_PUBLIC_API_URL` | 배포 API 오리진 (절대경로) |
 
-> **FE 배포(Vercel):** 개발의 `/api` 프록시는 Vercel에 없으므로, 배포 빌드는 `VITE_API_BASE_URL`로 API 절대 URL을 주입하고 요청에 `credentials: 'include'`를 붙여 세션 쿠키를 전송한다. `openapi-typescript` 타입 생성은 API의 `/v3/api-docs`를 소스로 유지.
+> **FE 배포(Vercel):** 배포 빌드는 `NEXT_PUBLIC_API_URL`로 API 절대 URL을 주입하고 요청에 `credentials: 'include'`를 붙여 세션 쿠키를 전송한다. `openapi-typescript` 타입 생성은 API의 `/v3/api-docs`를 소스로 유지.
 
 ---
 

@@ -16,6 +16,7 @@ services:
   postgres:
     image: postgres:16
     container_name: vibeguard-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-vibeguard}
       POSTGRES_USER: ${POSTGRES_USER:-vibeguard}
@@ -45,16 +46,18 @@ services:
       # DB: 기본은 컨테이너 내 postgres. Supabase로 붙이려면 .env에서 DB_URL 등을 오버라이드.
       DB_URL: ${DB_URL:-jdbc:postgresql://postgres:5432/vibeguard}
       DB_USER: ${DB_USER:-vibeguard}
-      DB_PASSWORD: ${DB_PASSWORD:-vibeguard}
+      # 관리형 DB 비밀번호가 없으면 로컬 postgres의 회전된 비밀번호를 그대로 사용한다.
+      # 두 기본값이 따로 놀면 POSTGRES_PASSWORD 회전 후 API 인증이 실패한다.
+      DB_PASSWORD: ${DB_PASSWORD:-${POSTGRES_PASSWORD:-vibeguard}}
       # GitHub OAuth (필수 — .env에 실제 값 지정)
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-changeme}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-changeme}
       # 토큰 암호화 키(AES-256-GCM, base64 32B). 운영에선 반드시 교체.
       TOKEN_ENC_KEY: ${TOKEN_ENC_KEY:-MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
       # CORS 허용 오리진 (FE 배포 도메인)
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
       # 로그인 성공 후 리다이렉트 URL
-      POST_LOGIN_URI: ${POST_LOGIN_URI:-http://localhost:5173/dashboard}
+      POST_LOGIN_URI: ${POST_LOGIN_URI:-http://localhost:3000/dashboard}
       # Agent Runner 연동 (HMAC). agent-runner 통합 시 base-url을 컨테이너명으로.
       RUNNER_BASE_URL: ${RUNNER_BASE_URL:-http://agent-runner:4000}
       RUNNER_CALLBACK_SECRET: ${RUNNER_CALLBACK_SECRET:-dev-secret-change-me}
@@ -79,11 +82,21 @@ services:
     environment:
       # Claude Agent SDK (필수 — .env에 실제 키 지정). 미설정 시 런너는 골격 모드로 동작.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # 로컬/배포 리허설에서 Claude API 비용 없이 전체 상태 흐름을 검증.
+      DRY_RUN: ${DRY_RUN:-0}
+      AGENT_MAX_BUDGET_USD: ${AGENT_MAX_BUDGET_USD:-0.5}
       # 서버로의 HMAC 콜백 대상. 컨테이너 네트워크에서 api-server를 서비스명으로 참조.
       API_BASE_URL: ${AGENT_API_BASE_URL:-http://api-server:8080}
       # 콜백 서명 키 — api-server의 RUNNER_CALLBACK_SECRET과 동일해야 함(NFR-S4).
       RUNNER_CALLBACK_SECRET: ${RUNNER_CALLBACK_SECRET:-dev-secret-change-me}
       RUNNER_PORT: 4000
+      # 작업 폴더·캐시 (요구사항 7 — 호스트와 동일 경로 공유).
+      # 러너가 여는 샌드박스 컨테이너는 호스트 Docker 데몬으로 뜨므로, 마운트 소스 경로는
+      # "호스트 경로" 기준으로 해석된다. 따라서 러너 컨테이너 내부 경로와 호스트 경로가
+      # 반드시 같아야(/srv/vibeguard : /srv/vibeguard) 샌드박스에 실제 리포/캐시가 붙는다.
+      # 경로가 다르면 빈 폴더가 마운트되어 스캔이 0건으로 나온다.
+      VIBEGUARD_WORK_DIR: ${VIBEGUARD_WORK_DIR:-/srv/vibeguard/work}
+      VIBEGUARD_CACHE_DIR: ${VIBEGUARD_CACHE_DIR:-/srv/vibeguard/cache}
     # 호스트 노출 포트. 로컬 4000이 점유된 경우 .env의 RUNNER_HOST_PORT로 변경.
     ports:
       - '${RUNNER_HOST_PORT:-4000}:4000'
@@ -91,6 +104,15 @@ services:
     # 주의: 소켓 마운트는 강력한 권한이므로 데모/신뢰 환경에서만 사용(NFR-S1).
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # 작업/캐시 공유 — 왼쪽(호스트)·오른쪽(컨테이너) 경로가 반드시 같아야 한다(요구사항 7).
+      # deploy.sh가 이 디렉토리를 uid 1000 소유로 미리 생성한다(도커가 만들면 root 소유라
+      # 러너 uid 1000이 쓰지 못함).
+      - /srv/vibeguard:/srv/vibeguard
+    # 호스트 docker 그룹 GID를 런타임에 부여해 소켓 접근 EACCES 방지.
+    # 이미지 기본값은 999. 호스트가 다르면 .env에 DOCKER_GID 지정:
+    #   echo "DOCKER_GID=$(stat -c '%g' /var/run/docker.sock)" >> .env
+    group_add:
+      - '${DOCKER_GID:-999}'
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://localhost:4000/health | grep -q ok || exit 1']
       interval: 10s

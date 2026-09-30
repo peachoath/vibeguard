@@ -25,12 +25,40 @@ RUN npm run build
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+
+# 런타임 의존 패키지:
+#   - git      : 대상 리포 클론 (Agent가 스캔할 저장소를 가져옴)
+#   - python3  : 샌드박스 CLI 실행 (testrunner-mcp가 sandbox/.venv/bin/python cli.py 호출)
+#   - docker.io: docker CLI만 필요(데몬 불필요). 컨테이너 3종은 호스트 소켓으로 띄운다
+#   - wget     : Docker Compose /health 점검
+# 한 레이어로 설치하고 apt 캐시 제거(이미지 경량화).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        wget \
+        python3 python3-venv \
+        docker.io \
+    && rm -rf /var/lib/apt/lists/*
+
 # 빌드 결과 + 프로덕션 의존성만 복사
 COPY --from=build /app/package.json /app/package-lock.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/runner/package.json ./runner/package.json
 COPY --from=build /app/runner/dist ./runner/dist
 COPY --from=build /app/mcp ./mcp
+
+# 샌드박스 러너 복사 + 호스트 도구용 venv 생성.
+# testrunner-mcp가 sandbox/.venv/bin/python 과 cli.py 를 하드코딩해 호출한다.
+# (.venv/fixtures/artifacts 는 .dockerignore로 제외 — 여기서 venv를 새로 만든다)
+COPY sandbox ./sandbox
+RUN python3 -m venv sandbox/.venv
+
+# node(비특권) 유저를 docker 그룹에 추가해 소켓 접근 시 EACCES 방지.
+# GID 999는 대부분 Linux 배포판의 docker 그룹 기본값. 호스트 GID가 다르면
+# compose의 group_add(${DOCKER_GID})로 런타임에 보정한다.
+RUN groupadd -fg 999 docker 2>/dev/null || true \
+    && usermod -aG docker node \
+    && chown -R node:node /app/sandbox
+
 # node 이미지 기본 비특권 사용자로 실행 (보안)
 USER node
 EXPOSE 4000

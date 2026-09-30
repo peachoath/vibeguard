@@ -1,0 +1,36 @@
+# VibeGuard 리버스 프록시 (AWS EC2 배포)
+#
+# 목적: FE(Vercel)가 크로스 오리진이라 세션 쿠키가 SameSite=None; Secure 여야 하므로
+#       api-server 앞단에 HTTPS(TLS 종단)가 필수다. Caddy가 Let's Encrypt로 인증서를
+#       자동 발급/갱신하고, 내부 api-server(8080)로 프록시한다.
+#
+# 사용:
+#   - DNS A 레코드가 이 EC2의 퍼블릭 IP(Elastic IP 권장)를 가리켜야 자동 TLS가 발급된다.
+#   - 도메인은 .env의 DEPLOY_DOMAIN 으로 주입된다(compose가 이 파일을 마운트).
+#   - EC2 보안그룹 인바운드 80/443 TCP 개방 필요(HTTP-01 챌린지 + HTTPS).
+#
+# 도메인이 아직 없다면(IP만 있는 경우): 아래 {$DEPLOY_DOMAIN} 대신 :443 { tls internal }
+# 로 바꾸면 자체 서명 인증서로 뜬다(브라우저 경고 있음, 데모 리허설용).
+
+{$DEPLOY_DOMAIN} {
+	# api-server 컨테이너로 프록시 (compose 내부 네트워크)
+	reverse_proxy api-server:8080 {
+		# SSE(text/event-stream) 스트리밍: 응답 버퍼링을 끄고 실시간 전달.
+		flush_interval -1
+	}
+
+	# 보안 헤더 (최소)
+	header {
+		# HTTPS 강제(1년). 서브도메인 포함은 도메인 구성 확정 후 조정.
+		Strict-Transport-Security "max-age=31536000"
+		# 프록시 노출 최소화
+		-Server
+	}
+
+	encode zstd gzip
+
+	log {
+		output stdout
+		format console
+	}
+}
