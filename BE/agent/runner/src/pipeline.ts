@@ -106,11 +106,14 @@ export class Pipeline {
           }
         }
 
-        // A3 DONE: Patch·TestRun 저장, A4 DONE: 생성된 PR 저장에 필요한 결과를 전달한다.
+        // A2 DONE: Finding 판정, A3 DONE: Patch·TestRun, A4 DONE: PR 저장에
+        // 필요한 구조화 결과를 API Server에 전달한다.
         const donePayload: Record<string, unknown> = { hasOutput: output != null }
         if (
           output != null &&
-          (agent.stage === 'REGRESSION_CHECK' || agent.stage === 'PR_CREATING')
+          (agent.stage === 'VERIFYING' ||
+            agent.stage === 'REGRESSION_CHECK' ||
+            agent.stage === 'PR_CREATING')
         ) {
           donePayload.stageOutput = output
         }
@@ -317,8 +320,11 @@ previous.SCANNING.findings 의 각 항목을 advisory MCP로 검증하고 패치
 
 ### 절차
 1. 각 finding에 대해 \`mcp__advisory__resolve_fixed_version\`을 호출해 withinMajor·fixesAll 후보를 얻는다.
-2. 동일 패키지에 여러 CVE가 있으면 가장 높은 수정 버전 하나로 통합해 patchCandidates에 기록한다.
-3. severity가 LOW이거나 patchable: false인 항목은 verifiedFindings에 기록만 하고 patchCandidates에서 제외한다.
+2. 공식 advisory상 현재 버전이 영향 범위에 없으면 verdict: IGNORE로 판정한다.
+3. 안전 버전을 특정할 수 있고 자동 수정 가능하면 verdict: PATCH로 판정한다.
+4. patchable: false, lock 파일, 안전 버전 불명확 등 자동 수정을 신뢰할 수 없으면 verdict: MANUAL로 판정한다.
+5. 동일 패키지에 여러 CVE가 있으면 PATCH 항목을 모두 해결하는 가장 높은 수정 버전 하나로 통합해 patchCandidates에 기록한다.
+6. 각 verifiedFinding에는 verdict, recommendedVersion, rationale를 반드시 넣는다.
 
 ### 최종 응답 형식 (JSON 블록 하나, 다른 텍스트 없음)
 
@@ -326,12 +332,15 @@ previous.SCANNING.findings 의 각 항목을 advisory MCP로 검증하고 패치
 {
   "verifiedFindings": [
     {
-      "id": "CVE-XXXX-XXXXX",
+      "cveId": "CVE-XXXX-XXXXX",
       "packageName": "requests",
       "installedVersion": "2.28.0",
       "withinMajor": "2.32.4",
       "fixesAll": "2.32.4",
-      "severity": "HIGH"
+      "severity": "HIGH",
+      "verdict": "PATCH",
+      "recommendedVersion": "2.32.4",
+      "rationale": "공식 advisory에서 현재 버전의 영향을 확인했고 동일 major 내 최소 안전 버전으로 상향 가능"
     }
   ],
   "patchCandidates": [

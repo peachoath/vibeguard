@@ -14,6 +14,7 @@ import dev.vibeguard.api.finding.FindingRepository;
 import dev.vibeguard.api.finding.FindingSaver;
 import dev.vibeguard.api.finding.FindingType;
 import dev.vibeguard.api.finding.Severity;
+import dev.vibeguard.api.finding.Verdict;
 import dev.vibeguard.api.patch.Patch;
 import dev.vibeguard.api.patch.PatchRepository;
 import dev.vibeguard.api.patch.PatchSaver;
@@ -26,6 +27,7 @@ import dev.vibeguard.api.pr.PullRequestRepository;
 import dev.vibeguard.api.runner.RunnerEvent;
 import dev.vibeguard.api.sse.SseHub;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -150,6 +152,70 @@ class ScanEventHandlerTest {
         verify(sseHub, never()).broadcast(any(), any(), any());
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // VERIFYING DONE — Agent 2 판정 반영
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void VERIFYING_DONE_판정과_권장버전_근거를_Finding에_반영한다() {
+        Finding patch = finding("CVE-2026-10001", "next");
+        Finding ignore = finding("CVE-2026-10002", "postcss");
+        Finding manual = finding("CVE-2026-10003", "sharp");
+        lenient().when(findingRepository.findAllByScanId(scanId))
+            .thenReturn(List.of(patch, ignore, manual));
+
+        String stageOutput = """
+            {"verifiedFindings":[
+              {"cveId":"CVE-2026-10001","packageName":"next","verdict":"PATCH",
+               "recommendedVersion":"16.2.11","rationale":"동일 major 안전 버전"},
+              {"cveId":"CVE-2026-10002","packageName":"postcss","verdict":"IGNORE",
+               "rationale":"현재 버전은 영향 범위 아님"},
+              {"cveId":"CVE-2026-10003","packageName":"sharp","verdict":"MANUAL",
+               "rationale":"lock 파일 수동 검토 필요"}
+            ],"patchCandidates":[
+              {"packageName":"next","from":"16.2.6","withinMajor":"16.2.11","fixesAll":"16.3.6"}
+            ]}
+            """;
+
+        handler.handle(stageEvent("VERIFYING", 2, "DONE",
+            Map.of("hasOutput", true, "stageOutput", stageOutput)));
+
+        assertThat(patch.getVerdict()).isEqualTo(Verdict.PATCH);
+        assertThat(patch.getRecommendedVersion()).isEqualTo("16.2.11");
+        assertThat(patch.getRationale()).isEqualTo("동일 major 안전 버전");
+        assertThat(ignore.getVerdict()).isEqualTo(Verdict.IGNORE);
+        assertThat(manual.getVerdict()).isEqualTo(Verdict.MANUAL);
+        verify(findingRepository).saveAll(any());
+    }
+
+    @Test
+    void VERIFYING_DONE_기존_A2_출력도_PATCH로_호환한다() {
+        Finding finding = finding("CVE-2023-32681", "requests");
+        lenient().when(findingRepository.findAllByScanId(scanId)).thenReturn(List.of(finding));
+        String legacyOutput = """
+            {"verifiedFindings":[
+              {"id":"CVE-2023-32681","packageName":"requests","withinMajor":"2.31.0","fixesAll":"2.32.4"}
+            ],"patchCandidates":[
+              {"packageName":"requests","from":"2.28.0","withinMajor":"2.31.0","fixesAll":"2.32.4"}
+            ]}
+            """;
+
+        handler.handle(stageEvent("VERIFYING", 2, "DONE",
+            Map.of("hasOutput", true, "stageOutput", legacyOutput)));
+
+        assertThat(finding.getVerdict()).isEqualTo(Verdict.PATCH);
+        assertThat(finding.getRecommendedVersion()).isEqualTo("2.31.0");
+        assertThat(finding.getRationale()).contains("공식 advisory");
+    }
+
+    @Test
+    void VERIFYING_DONE_stageOutput_없으면_Finding을_변경하지_않는다() {
+        handler.handle(stageEvent("VERIFYING", 2, "DONE", Map.of("hasOutput", false)));
+
+        verify(findingRepository, never()).findAllByScanId(any());
+        verify(findingRepository, never()).saveAll(any());
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // REGRESSION_CHECK DONE — Patch·TestRun 저장
     // ──────────────────────────────────────────────────────────────────────
@@ -162,6 +228,13 @@ class ScanEventHandlerTest {
         handler.handle(event);
 
         verify(testRunSaver, never()).saveIgnoreDuplicate(any());
+    }
+
+    private Finding finding(String cveId, String packageName) {
+        Finding finding = new Finding(scanId, FindingType.SCA);
+        finding.setCveId(cveId);
+        finding.setPackageName(packageName);
+        return finding;
     }
 
     @Test
