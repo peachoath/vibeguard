@@ -23,6 +23,7 @@ import dev.vibeguard.api.patch.TestRunRepository;
 import dev.vibeguard.api.pr.PullRequestRepository;
 import dev.vibeguard.api.repository.Repositories;
 import dev.vibeguard.api.repository.Repository;
+import dev.vibeguard.api.repository.GitHubClient;
 import dev.vibeguard.api.runner.HmacSigner;
 import dev.vibeguard.api.runner.RunnerClient;
 import dev.vibeguard.api.security.TokenCipher;
@@ -84,6 +85,8 @@ class ScanPipelineE2eTest {
     @MockitoBean CurrentUserService currentUserService;
     /** TokenCipher를 교체 — 테스트용 enc-token 복호화. */
     @MockitoBean TokenCipher tokenCipher;
+    /** 대시보드 PR 실시간 동기화의 외부 GitHub 호출 방지. DB fallback 집계만 검증한다. */
+    @MockitoBean GitHubClient gitHubClient;
 
     private MockMvc mvc;
     private User testUser;
