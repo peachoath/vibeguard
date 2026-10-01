@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Arrays;
 import java.util.List;
 import org.springframework.stereotype.Component;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -19,8 +20,12 @@ public class GitHubClient {
     private final RestClient restClient;
 
     public GitHubClient() {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(5_000);
+        requestFactory.setReadTimeout(5_000);
         this.restClient = RestClient.builder()
             .baseUrl(API_BASE)
+            .requestFactory(requestFactory)
             .defaultHeader("Accept", "application/vnd.github+json")
             .defaultHeader("X-GitHub-Api-Version", "2022-11-28")
             .build();
@@ -51,6 +56,34 @@ public class GitHubClient {
             .toList();
     }
 
+    /** 저장소의 VibeGuard 자동 생성 PR URL 목록. 과거 DB 유실분까지 대시보드에서 복원 집계한다. */
+    public List<String> listVibeGuardPullRequestUrls(String accessToken, String fullName) {
+        String[] ownerAndRepo = fullName.split("/", 2);
+        if (ownerAndRepo.length != 2) {
+            throw new IllegalArgumentException("Invalid GitHub repository name: " + fullName);
+        }
+
+        GitHubPullRequest[] pullRequests = restClient.get()
+            .uri(uriBuilder -> uriBuilder
+                .pathSegment("repos", ownerAndRepo[0], ownerAndRepo[1], "pulls")
+                .queryParam("state", "all")
+                .queryParam("per_page", 100)
+                .build())
+            .header("Authorization", "Bearer " + accessToken)
+            .retrieve()
+            .body(GitHubPullRequest[].class);
+
+        if (pullRequests == null) {
+            return List.of();
+        }
+        return Arrays.stream(pullRequests)
+            .filter(pr -> pr.head() != null && pr.head().ref() != null)
+            .filter(pr -> pr.head().ref().startsWith("vibeguard/patch-"))
+            .map(GitHubPullRequest::htmlUrl)
+            .filter(url -> url != null && !url.isBlank())
+            .toList();
+    }
+
     /** GitHub GET /user 응답 중 우리가 동기화하는 필드만. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record GitHubUser(
@@ -68,5 +101,16 @@ public class GitHubClient {
         String language,
         @JsonProperty("private") boolean isPrivate
     ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record GitHubPullRequest(
+        @JsonProperty("html_url") String htmlUrl,
+        GitHubPullRequestHead head
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record GitHubPullRequestHead(String ref) {
     }
 }
