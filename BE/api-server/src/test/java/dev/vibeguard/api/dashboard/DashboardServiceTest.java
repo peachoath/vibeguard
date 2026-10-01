@@ -55,7 +55,7 @@ class DashboardServiceTest {
         when(scanRepository.countByUserAndStatusIn(eq(userId), any())).thenReturn(4L);
         when(scanRepository.averageDurationMsByUser(userId)).thenReturn(1_500.0);
         when(scanRepository.countByUser(userId)).thenReturn(4L);
-        when(generatedPullRequestCounter.count(userId)).thenReturn(3L);
+        when(generatedPullRequestCounter.count()).thenReturn(3L);
         when(agentRunRepository.findCompletedByUserId(userId)).thenReturn(List.of());
 
         SummaryDto summary = dashboardService.summary(userId);
