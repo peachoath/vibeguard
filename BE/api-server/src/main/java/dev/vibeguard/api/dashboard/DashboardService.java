@@ -3,8 +3,11 @@ package dev.vibeguard.api.dashboard;
 import dev.vibeguard.api.finding.FindingRepository;
 import dev.vibeguard.api.finding.Severity;
 import dev.vibeguard.api.pr.PullRequestRepository;
+import dev.vibeguard.api.scan.AgentRun;
+import dev.vibeguard.api.scan.AgentRunRepository;
 import dev.vibeguard.api.scan.ScanRepository;
 import dev.vibeguard.api.scan.ScanStatus;
+import java.time.Duration;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -18,12 +21,15 @@ public class DashboardService {
     private final FindingRepository findingRepository;
     private final ScanRepository scanRepository;
     private final PullRequestRepository pullRequestRepository;
+    private final AgentRunRepository agentRunRepository;
 
     public DashboardService(FindingRepository findingRepository, ScanRepository scanRepository,
-                            PullRequestRepository pullRequestRepository) {
+                            PullRequestRepository pullRequestRepository,
+                            AgentRunRepository agentRunRepository) {
         this.findingRepository = findingRepository;
         this.scanRepository = scanRepository;
         this.pullRequestRepository = pullRequestRepository;
+        this.agentRunRepository = agentRunRepository;
     }
 
     @Transactional(readOnly = true)
@@ -54,7 +60,27 @@ public class DashboardService {
 
         long totalScans = scanRepository.count();
         long totalPrs = pullRequestRepository.countByUserId(userId);
+        StageDurationDto stageAverageDurationMs = stageAverages(
+            agentRunRepository.findCompletedByUserId(userId));
 
-        return new SummaryDto(distribution, patchSuccessRate, avgDurationMs, totalScans, totalPrs);
+        return new SummaryDto(
+            distribution, patchSuccessRate, avgDurationMs, stageAverageDurationMs, totalScans, totalPrs);
+    }
+
+    private StageDurationDto stageAverages(List<AgentRun> runs) {
+        return new StageDurationDto(
+            averageForAgent(runs, (short) 1),
+            averageForAgent(runs, (short) 2),
+            averageForAgent(runs, (short) 3),
+            averageForAgent(runs, (short) 4));
+    }
+
+    private Long averageForAgent(List<AgentRun> runs, short agentNo) {
+        var average = runs.stream()
+            .filter(run -> run.getAgentNo() == agentNo)
+            .mapToLong(run -> Duration.between(run.getStartedAt(), run.getFinishedAt()).toMillis())
+            .filter(duration -> duration >= 0)
+            .average();
+        return average.isPresent() ? Math.round(average.getAsDouble()) : null;
     }
 }

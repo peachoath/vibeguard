@@ -101,7 +101,13 @@ function ResultsContent() {
             <h2>필터</h2><h3>심각도</h3>
             <div className="severity-options">
               {severities.map((s) => (
-                <button key={s.id} className={severity === s.id ? "active" : s.id.toLowerCase()} onClick={() => setSeverity(s.id)}>
+                <button
+                  type="button"
+                  key={s.id}
+                  className={`${s.id.toLowerCase()}${severity === s.id ? " active" : ""}`}
+                  aria-pressed={severity === s.id}
+                  onClick={() => setSeverity(s.id)}
+                >
                   <span>{s.label}</span><b>{s.count}</b>
                 </button>
               ))}
@@ -109,9 +115,9 @@ function ResultsContent() {
             <div className="filter-divider" />
             <h3>판정</h3>
             <div className="verdict-options">
-              <button className={verdict === "PATCH" ? "active patch" : "patch"} onClick={() => setVerdict(verdict === "PATCH" ? "all" : "PATCH")}><span>패치</span><b>{verdictCounts.PATCH}</b></button>
-              <button className={verdict === "IGNORE" ? "active ignore" : "ignore"} onClick={() => setVerdict(verdict === "IGNORE" ? "all" : "IGNORE")}><span>무시</span><b>{verdictCounts.IGNORE}</b></button>
-              <button className={verdict === "MANUAL" ? "active manual" : "manual"} onClick={() => setVerdict(verdict === "MANUAL" ? "all" : "MANUAL")}><span>수동 확인</span><b>{verdictCounts.MANUAL}</b></button>
+              <button type="button" className={verdict === "PATCH" ? "active patch" : "patch"} aria-pressed={verdict === "PATCH"} onClick={() => setVerdict(verdict === "PATCH" ? "all" : "PATCH")}><span>패치</span><b>{verdictCounts.PATCH}</b></button>
+              <button type="button" className={verdict === "IGNORE" ? "active ignore" : "ignore"} aria-pressed={verdict === "IGNORE"} onClick={() => setVerdict(verdict === "IGNORE" ? "all" : "IGNORE")}><span>무시</span><b>{verdictCounts.IGNORE}</b></button>
+              <button type="button" className={verdict === "MANUAL" ? "active manual" : "manual"} aria-pressed={verdict === "MANUAL"} onClick={() => setVerdict(verdict === "MANUAL" ? "all" : "MANUAL")}><span>수동 확인</span><b>{verdictCounts.MANUAL}</b></button>
             </div>
             <Link className="filter-history-link" href="/history" scroll={false}>검사 이력 보기</Link>
           </aside>
