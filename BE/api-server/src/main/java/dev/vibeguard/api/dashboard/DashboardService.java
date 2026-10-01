@@ -58,7 +58,8 @@ public class DashboardService {
         Long avgDurationMs = avg == null ? null : Math.round(avg);
 
         long totalScans = scanRepository.countByUser(userId);
-        long totalPrs = generatedPullRequestCounter.count(userId);
+        // 생성 PR은 시연 환경 전체에서 VibeGuard가 만든 GitHub PR을 중복 제거해 집계한다.
+        long totalPrs = generatedPullRequestCounter.count();
         StageDurationDto stageAverageDurationMs = stageAverages(
             agentRunRepository.findCompletedByUserId(userId));
 
