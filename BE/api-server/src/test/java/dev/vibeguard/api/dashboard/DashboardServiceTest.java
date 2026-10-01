@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import dev.vibeguard.api.finding.FindingRepository;
-import dev.vibeguard.api.pr.PullRequestRepository;
 import dev.vibeguard.api.scan.AgentRun;
 import dev.vibeguard.api.scan.AgentRunRepository;
 import dev.vibeguard.api.scan.ScanRepository;
@@ -22,7 +21,7 @@ class DashboardServiceTest {
 
     @Mock FindingRepository findingRepository;
     @Mock ScanRepository scanRepository;
-    @Mock PullRequestRepository pullRequestRepository;
+    @Mock GeneratedPullRequestCounter generatedPullRequestCounter;
     @Mock AgentRunRepository agentRunRepository;
     @InjectMocks DashboardService dashboardService;
 
