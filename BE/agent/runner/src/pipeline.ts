@@ -106,9 +106,12 @@ export class Pipeline {
           }
         }
 
-        // A3(REGRESSION_CHECK) DONE: stageOutput 포함 → ScanEventHandler가 Patch·TestRun 저장
+        // A3 DONE: Patch·TestRun 저장, A4 DONE: 생성된 PR 저장에 필요한 결과를 전달한다.
         const donePayload: Record<string, unknown> = { hasOutput: output != null }
-        if (output != null && agent.stage === 'REGRESSION_CHECK') {
+        if (
+          output != null &&
+          (agent.stage === 'REGRESSION_CHECK' || agent.stage === 'PR_CREATING')
+        ) {
           donePayload.stageOutput = output
         }
         await this.callback.stage(scanId, agent.stage, agent.agentNo, 'DONE', donePayload)

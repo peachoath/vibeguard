@@ -14,6 +14,8 @@ import dev.vibeguard.api.patch.TestOutcome;
 import dev.vibeguard.api.patch.TestPhase;
 import dev.vibeguard.api.patch.TestRun;
 import dev.vibeguard.api.patch.TestRunSaver;
+import dev.vibeguard.api.pr.PullRequest;
+import dev.vibeguard.api.pr.PullRequestRepository;
 import dev.vibeguard.api.runner.RunnerEvent;
 import dev.vibeguard.api.runner.RunnerEventHandler;
 import dev.vibeguard.api.sse.SseHub;
@@ -23,6 +25,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -40,6 +44,7 @@ public class ScanEventHandler implements RunnerEventHandler {
 
     private static final Logger log = LoggerFactory.getLogger(ScanEventHandler.class);
     private static final int LOG_MAX_CHARS = 8_000;
+    private static final Pattern GITHUB_PR_URL = Pattern.compile("/pull/(\\d+)(?:/)?$");
 
     private final ScanService scanService;
     private final SseHub sseHub;
@@ -49,13 +54,16 @@ public class ScanEventHandler implements RunnerEventHandler {
     private final PatchRepository patchRepository;
     private final PatchSaver patchSaver;
     private final TestRunSaver testRunSaver;
+    private final PullRequestRepository pullRequestRepository;
     private final ObjectMapper objectMapper;
 
     public ScanEventHandler(ScanService scanService, SseHub sseHub,
                             FindingSaver findingSaver, FindingRepository findingRepository,
                             AgentRunRepository agentRunRepository,
                             PatchRepository patchRepository, PatchSaver patchSaver,
-                            TestRunSaver testRunSaver, ObjectMapper objectMapper) {
+                            TestRunSaver testRunSaver,
+                            PullRequestRepository pullRequestRepository,
+                            ObjectMapper objectMapper) {
         this.scanService = scanService;
         this.sseHub = sseHub;
         this.findingSaver = findingSaver;
@@ -64,6 +72,7 @@ public class ScanEventHandler implements RunnerEventHandler {
         this.patchRepository = patchRepository;
         this.patchSaver = patchSaver;
         this.testRunSaver = testRunSaver;
+        this.pullRequestRepository = pullRequestRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -103,6 +112,12 @@ public class ScanEventHandler implements RunnerEventHandler {
         if ("REGRESSION_CHECK".equalsIgnoreCase(event.stage())
                 && "DONE".equalsIgnoreCase(event.status())) {
             handleRegressionCheckDone(scanId, event);
+        }
+
+        // A4(PR_CREATING) DONE → Agent가 실제 생성한 PR 정보를 멱등 저장한다.
+        if ("PR_CREATING".equalsIgnoreCase(event.stage())
+                && "DONE".equalsIgnoreCase(event.status())) {
+            handlePullRequestCreatingDone(scanId, event);
         }
 
         sseHub.broadcast(scanId, "stage", toPayload(event));
@@ -219,6 +234,58 @@ public class ScanEventHandler implements RunnerEventHandler {
 
             log.debug("[scan-event] Patch·TestRun 저장 scanId={} findingId={} baseline={} postPatch={}",
                 scanId, findingId, baseline, postPatch);
+        }
+    }
+
+    /**
+     * PR_CREATING DONE 이벤트의 A4 JSON 결과를 pull_requests에 저장한다.
+     * 동일 콜백이 재전송돼도 scan_id 기준으로 기존 행을 갱신해 대시보드 건수가 중복되지 않는다.
+     */
+    private void handlePullRequestCreatingDone(UUID scanId, RunnerEvent event) {
+        if (event.payload() == null) return;
+
+        Object raw = event.payload().get("stageOutput");
+        if (raw == null) {
+            log.debug("[scan-event] PR_CREATING DONE stageOutput 없음 scanId={}", scanId);
+            return;
+        }
+
+        Map<String, Object> a4;
+        try {
+            a4 = objectMapper.readValue(stripMarkdownFences(raw.toString()),
+                new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.warn("[scan-event] PR_CREATING stageOutput JSON 파싱 실패 scanId={}: {}", scanId, e.getMessage());
+            return;
+        }
+
+        if (!"PR_CREATED".equalsIgnoreCase(str(a4, "outcome"))) {
+            log.debug("[scan-event] PR 생성 결과 아님 scanId={} outcome={}", scanId, str(a4, "outcome"));
+            return;
+        }
+
+        String prUrl = str(a4, "prUrl");
+        if (prUrl == null || prUrl.isBlank()) {
+            log.warn("[scan-event] PR_CREATED이나 prUrl 없음 scanId={}", scanId);
+            return;
+        }
+
+        PullRequest pullRequest = pullRequestRepository.findFirstByScanId(scanId)
+            .orElseGet(() -> new PullRequest(scanId));
+        pullRequest.setUrl(prUrl);
+        pullRequest.setBranchName(str(a4, "branch"));
+        pullRequest.setGithubPrNumber(parseGithubPrNumber(prUrl));
+        pullRequest.setState("OPEN");
+        pullRequestRepository.save(pullRequest);
+    }
+
+    private Integer parseGithubPrNumber(String prUrl) {
+        Matcher matcher = GITHUB_PR_URL.matcher(prUrl);
+        if (!matcher.find()) return null;
+        try {
+            return Integer.valueOf(matcher.group(1));
+        } catch (NumberFormatException ignored) {
+            return null;
         }
     }
 
