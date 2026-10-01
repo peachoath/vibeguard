@@ -38,7 +38,7 @@ public class DashboardService {
         for (Severity s : Severity.values()) {
             distribution.put(s, 0L);
         }
-        for (Object[] row : findingRepository.countBySeverity()) {
+        for (Object[] row : findingRepository.countBySeverityForUser(userId)) {
             Severity sev = (Severity) row[0];
             Long count = (Long) row[1];
             if (sev != null) {
@@ -47,18 +47,18 @@ public class DashboardService {
         }
 
         // 패치 성공률 = COMPLETED / (패치 시도가 종료된 스캔: COMPLETED + PATCH_FAILED + REGRESSION_BLOCKED)
-        long completed = scanRepository.countByStatus(ScanStatus.COMPLETED);
-        long patchAttemptTerminal = scanRepository.countByStatusIn(List.of(
+        long completed = scanRepository.countByUserAndStatus(userId, ScanStatus.COMPLETED);
+        long patchAttemptTerminal = scanRepository.countByUserAndStatusIn(userId, List.of(
             ScanStatus.COMPLETED, ScanStatus.PATCH_FAILED, ScanStatus.REGRESSION_BLOCKED));
         double patchSuccessRate = patchAttemptTerminal == 0
             ? 0.0
             : (double) completed / patchAttemptTerminal;
 
-        Double avg = scanRepository.averageDurationMs();
+        Double avg = scanRepository.averageDurationMsByUser(userId);
         Long avgDurationMs = avg == null ? null : Math.round(avg);
 
-        long totalScans = scanRepository.count();
-        long totalPrs = generatedPullRequestCounter.count();
+        long totalScans = scanRepository.countByUser(userId);
+        long totalPrs = generatedPullRequestCounter.count(userId);
         StageDurationDto stageAverageDurationMs = stageAverages(
             agentRunRepository.findCompletedByUserId(userId));
 

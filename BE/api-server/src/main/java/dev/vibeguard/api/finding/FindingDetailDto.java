@@ -6,6 +6,7 @@ import java.util.UUID;
 /** Finding 상세 + 근거 응답 (PRD §9 FindingDetailDto). FindingDto + snippet/rationale. */
 public record FindingDetailDto(
     UUID id,
+    UUID scanId,
     FindingType type,
     String ruleId,
     String cveId,
@@ -22,13 +23,14 @@ public record FindingDetailDto(
     String recommendedVersion,
     Verdict verdict,
     String rationale,
-    FindingStatus status
+    FindingStatus status,
+    boolean hasPatch
 ) {
-    public static FindingDetailDto from(Finding f) {
+    public static FindingDetailDto from(Finding f, boolean hasPatch) {
         return new FindingDetailDto(
-            f.getId(), f.getType(), f.getRuleId(), f.getCveId(), f.getCweId(),
+            f.getId(), f.getScanId(), f.getType(), f.getRuleId(), f.getCveId(), f.getCweId(),
             f.getSeverity(), f.getCvssScore(), f.getFilePath(), f.getLineStart(), f.getLineEnd(),
             f.getSnippet(), f.getManifestPath(), f.getPackageName(), f.getCurrentVersion(),
-            f.getRecommendedVersion(), f.getVerdict(), f.getRationale(), f.getStatus());
+            f.getRecommendedVersion(), f.getVerdict(), f.getRationale(), f.getStatus(), hasPatch);
     }
 }

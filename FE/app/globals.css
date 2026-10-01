@@ -988,7 +988,7 @@ a { color: inherit; text-decoration: none; }
 .recent-scan-row:last-child { border-bottom: 0; }
 .recent-scan-row strong { color: var(--ink); }
 .recent-scan-row b { font-size: 9px; }
-.recent-scan-row b.complete { color: #0aaa77; }.recent-scan-row b.blocked { color: #e84759; }.recent-scan-row b.untested { color: #2c7ef1; }
+.recent-scan-row b.complete { color: #0aaa77; }.recent-scan-row b.blocked { color: #e84759; }.recent-scan-row b.failed { color: #ef8a00; }.recent-scan-row b.untested { color: #2c7ef1; }
 .recent-scan-row a { color: #287df1; font-weight: 800; transition: color .15s ease; }
 .recent-scan-row a:hover { color: #1560d6; text-decoration: underline; }
 .severity-content { display: grid; grid-template-columns: 122px 1fr; align-items: center; gap: 15px; }

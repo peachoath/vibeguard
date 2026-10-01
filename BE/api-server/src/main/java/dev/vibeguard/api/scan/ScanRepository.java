@@ -44,4 +44,19 @@ public interface ScanRepository extends JpaRepository<Scan, UUID> {
     @Query("select count(s) from Scan s where s.repositoryId in "
         + "(select r.id from Repository r where r.userId = :userId)")
     long countByUser(UUID userId);
+
+    /** 현재 사용자의 특정 상태 스캔 수. */
+    @Query("select count(s) from Scan s where s.status = :status and s.repositoryId in "
+        + "(select r.id from Repository r where r.userId = :userId)")
+    long countByUserAndStatus(UUID userId, ScanStatus status);
+
+    /** 현재 사용자의 여러 상태 스캔 수. */
+    @Query("select count(s) from Scan s where s.status in :statuses and s.repositoryId in "
+        + "(select r.id from Repository r where r.userId = :userId)")
+    long countByUserAndStatusIn(UUID userId, Collection<ScanStatus> statuses);
+
+    /** 현재 사용자 스캔의 평균 처리 시간(ms). */
+    @Query("select avg(s.durationMs) from Scan s where s.durationMs is not null and s.repositoryId in "
+        + "(select r.id from Repository r where r.userId = :userId)")
+    Double averageDurationMsByUser(UUID userId);
 }

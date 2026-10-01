@@ -134,41 +134,34 @@ export default function FindingDetailPage() {
               )}
             </dl>
 
-            {finding.description && (
+            {finding.rationale && (
               <div className="finding-description">
-                <h3>설명</h3>
-                <p>{finding.description}</p>
+                <h3>판정 근거</h3>
+                <p>{finding.rationale}</p>
               </div>
             )}
 
-            {finding.remediationAdvice && (
+            {finding.snippet && (
               <div className="finding-remediation">
-                <h3>조치 방법</h3>
-                <p>{finding.remediationAdvice}</p>
-              </div>
-            )}
-
-            {finding.references && finding.references.length > 0 && (
-              <div className="finding-references">
-                <h3>참고 자료</h3>
-                <ul>
-                  {finding.references.map((ref) => (
-                    <li key={ref}>
-                      <a href={ref} target="_blank" rel="noreferrer">{ref}</a>
-                    </li>
-                  ))}
-                </ul>
+                <h3>탐지 근거</h3>
+                <pre>{finding.snippet}</pre>
               </div>
             )}
 
             <div className="finding-detail-actions">
-              <a href={`${API_BASE}/api/v1/findings/${id}/evidence`} target="_blank" rel="noreferrer">
-                증거 JSON
-              </a>
-              <a href={`${API_BASE}/api/v1/findings/${id}/diff`} target="_blank" rel="noreferrer">
-                Diff JSON
-              </a>
-              <Link href="/results">← 목록으로</Link>
+              {finding.hasPatch ? (
+                <>
+                  <a href={`${API_BASE}/api/v1/findings/${id}/evidence`} target="_blank" rel="noreferrer">
+                    회귀 증거 JSON
+                  </a>
+                  <a href={`${API_BASE}/api/v1/findings/${id}/diff`} target="_blank" rel="noreferrer">
+                    패치 Diff JSON
+                  </a>
+                </>
+              ) : (
+                <span>패치가 생성되지 않아 회귀 증거와 Diff가 없습니다.</span>
+              )}
+              <Link href={`/results?scanId=${finding.scanId}`}>← 목록으로</Link>
             </div>
           </div>
         )}

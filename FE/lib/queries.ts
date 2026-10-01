@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./api";
+import { isActiveScanStatus } from "./scan-status";
 
 // ──────────────────────────────────────────────────────────
 // 타입 (BE ScanDto/Repository 등은 모든 호출자에게 동일 shape를 반환하므로 여기서 단일화)
@@ -79,9 +80,10 @@ export interface FindingDto {
 }
 
 export interface FindingDetailDto extends FindingDto {
-  description: string | null;
-  remediationAdvice: string | null;
-  references: string[] | null;
+  scanId: string;
+  snippet: string | null;
+  rationale: string | null;
+  hasPatch: boolean;
 }
 
 export interface PageResponse<T> {
@@ -153,7 +155,7 @@ export function useScans(opts?: { poll?: boolean }) {
     refetchInterval: opts?.poll
       ? (query) => {
           const data = query.state.data as ScanDto[] | undefined;
-          const live = data?.some((s) => s.status === "QUEUED" || s.status === "RUNNING");
+          const live = data?.some((s) => isActiveScanStatus(s.status));
           return live ? 5000 : false;
         }
       : false,

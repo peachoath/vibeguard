@@ -10,22 +10,7 @@ import { EmptyState } from "../components/empty-state";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
 import { useRepositories, useScans } from "@/lib/queries";
-
-function statusTone(status: string): string {
-  if (status === "COMPLETED") return "complete";
-  if (status === "REGRESSION_BLOCKED") return "blocked";
-  if (status === "FAILED") return "failed";
-  return "waiting";
-}
-
-function statusLabel(status: string): string {
-  if (status === "COMPLETED") return "완료";
-  if (status === "REGRESSION_BLOCKED") return "회귀 차단";
-  if (status === "FAILED") return "실패";
-  if (status === "QUEUED") return "대기 중";
-  if (status === "RUNNING") return "진행 중";
-  return status;
-}
+import { isFailureScanStatus, scanStatusFilterGroup, scanStatusLabel, scanStatusTone } from "@/lib/scan-status";
 
 function formatDuration(ms: number | null): string {
   if (!ms) return "-";
@@ -53,7 +38,7 @@ export default function HistoryPage() {
   const visible = useMemo(() => {
     const rangeDays = parseInt(range, 10);
     return scans.filter((s) => {
-      if (status !== "all" && statusTone(s.status) !== status) return false;
+      if (status !== "all" && scanStatusFilterGroup(s.status) !== status) return false;
       if (s.startedAt && (now - new Date(s.startedAt).getTime()) > rangeDays * 86_400_000) return false;
       return true;
     });
@@ -61,8 +46,8 @@ export default function HistoryPage() {
 
   const summary = useMemo(() => ({
     complete: scans.filter((s) => s.status === "COMPLETED").length,
-    clean: scans.filter((s) => s.status === "COMPLETED" && !s.errorCode).length,
-    failed: scans.filter((s) => s.status === "FAILED").length,
+    clean: scans.filter((s) => s.status === "NO_FINDINGS").length,
+    failed: scans.filter((s) => isFailureScanStatus(s.status)).length,
     blocked: scans.filter((s) => s.status === "REGRESSION_BLOCKED").length,
   }), [scans]);
 
@@ -71,7 +56,7 @@ export default function HistoryPage() {
       s.startedAt ? new Date(s.startedAt).toLocaleString("ko-KR") : "-",
       repoMap[s.repositoryId] ?? s.repositoryId,
       s.ref,
-      statusLabel(s.status),
+      scanStatusLabel(s.status),
       formatDuration(s.durationMs),
       s.errorCode ?? "-",
     ].join(","));
@@ -140,13 +125,13 @@ export default function HistoryPage() {
               </article>
             ))}
             {!loading && visible.map((scan) => (
-              <article className={`history-row ${statusTone(scan.status)}`} key={scan.id}>
+              <article className={`history-row ${scanStatusTone(scan.status)}`} key={scan.id}>
                 <span className="timeline-dot" aria-hidden="true" />
                 <div className="history-repository">
                   <time>{scan.startedAt ? new Date(scan.startedAt).toLocaleString("ko-KR") : "-"}</time>
                   <strong>{repoMap[scan.repositoryId] ?? "…"} / {scan.ref}</strong>
                 </div>
-                <span className="history-state">{statusLabel(scan.status)}</span>
+                <span className="history-state">{scanStatusLabel(scan.status)}</span>
                 <p>{scan.commitSha ? `커밋 ${scan.commitSha.slice(0, 7)}` : "커밋 정보 없음"}</p>
                 <b>{formatDuration(scan.durationMs)}</b>
                 <Link className="history-detail" href={`/results?scanId=${scan.id}`} scroll={false}>상세 보기 →</Link>
