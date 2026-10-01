@@ -8,6 +8,7 @@ public record SummaryDto(
     Map<Severity, Long> severityDistribution,
     double patchSuccessRate,
     Long avgDurationMs,
+    StageDurationDto stageAverageDurationMs,
     long totalScans,
     long totalPrs
 ) {

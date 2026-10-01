@@ -25,6 +25,17 @@ const VERDICT_LABELS: Record<string, string> = {
   MANUAL: "수동 확인",
 };
 
+/** verdict가 null/미지정일 수 있어(아직 판정 안 된 OPEN finding) 안전하게 처리. */
+function verdictClass(v: string | null | undefined): string {
+  if (v === "PATCH") return "patch";
+  if (v === "MANUAL") return "manual";
+  if (v === "IGNORE") return "ignore";
+  return "neutral";
+}
+function verdictLabel(v: string | null | undefined): string {
+  return (v && VERDICT_LABELS[v]) || "미판정";
+}
+
 function ResultsContent() {
   const params = useSearchParams();
   const scanId = params.get("scanId");
@@ -101,7 +112,13 @@ function ResultsContent() {
             <h2>필터</h2><h3>심각도</h3>
             <div className="severity-options">
               {severities.map((s) => (
-                <button key={s.id} className={severity === s.id ? "active" : s.id.toLowerCase()} onClick={() => setSeverity(s.id)}>
+                <button
+                  type="button"
+                  key={s.id}
+                  className={`${s.id.toLowerCase()}${severity === s.id ? " active" : ""}`}
+                  aria-pressed={severity === s.id}
+                  onClick={() => setSeverity(s.id)}
+                >
                   <span>{s.label}</span><b>{s.count}</b>
                 </button>
               ))}
@@ -109,9 +126,9 @@ function ResultsContent() {
             <div className="filter-divider" />
             <h3>판정</h3>
             <div className="verdict-options">
-              <button className={verdict === "PATCH" ? "active patch" : "patch"} onClick={() => setVerdict(verdict === "PATCH" ? "all" : "PATCH")}><span>패치</span><b>{verdictCounts.PATCH}</b></button>
-              <button className={verdict === "IGNORE" ? "active ignore" : "ignore"} onClick={() => setVerdict(verdict === "IGNORE" ? "all" : "IGNORE")}><span>무시</span><b>{verdictCounts.IGNORE}</b></button>
-              <button className={verdict === "MANUAL" ? "active manual" : "manual"} onClick={() => setVerdict(verdict === "MANUAL" ? "all" : "MANUAL")}><span>수동 확인</span><b>{verdictCounts.MANUAL}</b></button>
+              <button type="button" className={verdict === "PATCH" ? "active patch" : "patch"} aria-pressed={verdict === "PATCH"} onClick={() => setVerdict(verdict === "PATCH" ? "all" : "PATCH")}><span>패치</span><b>{verdictCounts.PATCH}</b></button>
+              <button type="button" className={verdict === "IGNORE" ? "active ignore" : "ignore"} aria-pressed={verdict === "IGNORE"} onClick={() => setVerdict(verdict === "IGNORE" ? "all" : "IGNORE")}><span>무시</span><b>{verdictCounts.IGNORE}</b></button>
+              <button type="button" className={verdict === "MANUAL" ? "active manual" : "manual"} aria-pressed={verdict === "MANUAL"} onClick={() => setVerdict(verdict === "MANUAL" ? "all" : "MANUAL")}><span>수동 확인</span><b>{verdictCounts.MANUAL}</b></button>
             </div>
             <Link className="filter-history-link" href="/history" scroll={false}>검사 이력 보기</Link>
           </aside>
@@ -182,8 +199,8 @@ function ResultsContent() {
                         </td>
                         <td><span className={`severity-badge ${item.severity.toLowerCase()}`}>{SEVERITY_LABELS[item.severity] ?? item.severity}</span></td>
                         <td>
-                          <span className={`finding-verdict ${item.verdict === "MANUAL" ? "manual" : item.verdict === "IGNORE" ? "ignore" : "patch"}`}>
-                            {VERDICT_LABELS[item.verdict] ?? item.verdict}
+                          <span className={`finding-verdict ${verdictClass(item.verdict)}`}>
+                            {verdictLabel(item.verdict)}
                           </span>
                         </td>
                         <td><span className={`finding-regression ${item.status.toLowerCase()}`}>{item.status}</span></td>

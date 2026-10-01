@@ -19,6 +19,12 @@ export interface SummaryDto {
   severityDistribution: Record<string, number>;
   patchSuccessRate: number;
   avgDurationMs: number | null;
+  stageAverageDurationMs: {
+    scanMs: number | null;
+    verificationMs: number | null;
+    regressionMs: number | null;
+    pullRequestMs: number | null;
+  };
   totalScans: number;
   totalPrs: number;
 }
@@ -66,7 +72,7 @@ export interface FindingDto {
   packageName: string | null;
   currentVersion: string | null;
   recommendedVersion: string | null;
-  verdict: string;
+  verdict: string | null;
   status: string;
 }
 

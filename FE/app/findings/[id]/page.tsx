@@ -17,6 +17,17 @@ const VERDICT_LABELS: Record<string, string> = {
   PATCH: "패치", IGNORE: "무시", MANUAL: "수동 확인",
 };
 
+/** verdict가 null/미지정일 수 있어(아직 판정 안 된 OPEN finding) 안전하게 처리. */
+function verdictClass(v: string | null | undefined): string {
+  if (v === "PATCH") return "patch";
+  if (v === "MANUAL") return "manual";
+  if (v === "IGNORE") return "ignore";
+  return "neutral";
+}
+function verdictLabel(v: string | null | undefined): string {
+  return (v && VERDICT_LABELS[v]) || "미판정";
+}
+
 export default function FindingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -88,8 +99,8 @@ export default function FindingDetailPage() {
               <div>
                 <dt>판정</dt>
                 <dd>
-                  <span className={`finding-verdict ${finding.verdict === "MANUAL" ? "manual" : finding.verdict === "IGNORE" ? "ignore" : "patch"}`}>
-                    {VERDICT_LABELS[finding.verdict] ?? finding.verdict}
+                  <span className={`finding-verdict ${verdictClass(finding.verdict)}`}>
+                    {verdictLabel(finding.verdict)}
                   </span>
                 </dd>
               </div>
