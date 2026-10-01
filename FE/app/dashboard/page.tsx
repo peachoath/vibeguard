@@ -11,8 +11,8 @@ import ScreenContent from "../components/screen-content";
 import { useDashboardSummary, useRepositories, useScans, type ScanDto } from "@/lib/queries";
 
 function formatDuration(ms: number | null): string {
-  if (!ms) return "-";
-  const s = Math.floor(ms / 1000);
+  if (ms === null) return "-";
+  const s = Math.max(0, Math.round(ms / 1000));
   const m = Math.floor(s / 60);
   return m > 0 ? `${m}분 ${s % 60}초` : `${s}초`;
 }
@@ -224,8 +224,14 @@ export default function DashboardPage() {
 
               <section className="processing-card">
                 <div className="security-card-heading">
-                  <div><h2>평균 처리 시간</h2><p>전체 스캔 평균</p></div>
+                  <div><h2>평균 처리 시간</h2><p>완료된 단계별 평균</p></div>
                   <strong>{formatDuration(summary?.avgDurationMs ?? null)}</strong>
+                </div>
+                <div className="processing-grid" aria-label="단계별 평균 처리 시간">
+                  <article className="scan"><span>스캔</span><strong>{formatDuration(summary?.stageAverageDurationMs?.scanMs ?? null)}</strong><small>취약점 탐지</small></article>
+                  <article className="verify"><span>검증</span><strong>{formatDuration(summary?.stageAverageDurationMs?.verificationMs ?? null)}</strong><small>오탐 판별</small></article>
+                  <article className="regression"><span>회귀 검증</span><strong>{formatDuration(summary?.stageAverageDurationMs?.regressionMs ?? null)}</strong><small>테스트 실행</small></article>
+                  <article className="pr"><span>PR 생성</span><strong>{formatDuration(summary?.stageAverageDurationMs?.pullRequestMs ?? null)}</strong><small>리뷰 요청</small></article>
                 </div>
               </section>
             </div>

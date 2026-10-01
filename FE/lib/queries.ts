@@ -19,6 +19,12 @@ export interface SummaryDto {
   severityDistribution: Record<string, number>;
   patchSuccessRate: number;
   avgDurationMs: number | null;
+  stageAverageDurationMs: {
+    scanMs: number | null;
+    verificationMs: number | null;
+    regressionMs: number | null;
+    pullRequestMs: number | null;
+  };
   totalScans: number;
   totalPrs: number;
 }
