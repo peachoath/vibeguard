@@ -2,7 +2,6 @@ package dev.vibeguard.api.dashboard;
 
 import dev.vibeguard.api.finding.FindingRepository;
 import dev.vibeguard.api.finding.Severity;
-import dev.vibeguard.api.pr.PullRequestRepository;
 import dev.vibeguard.api.scan.AgentRun;
 import dev.vibeguard.api.scan.AgentRunRepository;
 import dev.vibeguard.api.scan.ScanRepository;
@@ -20,15 +19,15 @@ public class DashboardService {
 
     private final FindingRepository findingRepository;
     private final ScanRepository scanRepository;
-    private final PullRequestRepository pullRequestRepository;
+    private final GeneratedPullRequestCounter generatedPullRequestCounter;
     private final AgentRunRepository agentRunRepository;
 
     public DashboardService(FindingRepository findingRepository, ScanRepository scanRepository,
-                            PullRequestRepository pullRequestRepository,
+                            GeneratedPullRequestCounter generatedPullRequestCounter,
                             AgentRunRepository agentRunRepository) {
         this.findingRepository = findingRepository;
         this.scanRepository = scanRepository;
-        this.pullRequestRepository = pullRequestRepository;
+        this.generatedPullRequestCounter = generatedPullRequestCounter;
         this.agentRunRepository = agentRunRepository;
     }
 
@@ -59,7 +58,7 @@ public class DashboardService {
         Long avgDurationMs = avg == null ? null : Math.round(avg);
 
         long totalScans = scanRepository.count();
-        long totalPrs = pullRequestRepository.countByUserId(userId);
+        long totalPrs = generatedPullRequestCounter.count();
         StageDurationDto stageAverageDurationMs = stageAverages(
             agentRunRepository.findCompletedByUserId(userId));
 
