@@ -57,6 +57,8 @@ export interface GitHubRepo {
   isPrivate: boolean;
 }
 
+export type FindingVerdict = "PATCH" | "IGNORE" | "MANUAL";
+
 export interface FindingDto {
   id: string;
   type: string;
@@ -72,7 +74,7 @@ export interface FindingDto {
   packageName: string | null;
   currentVersion: string | null;
   recommendedVersion: string | null;
-  verdict: string | null;
+  verdict: FindingVerdict | null;
   status: string;
 }
 

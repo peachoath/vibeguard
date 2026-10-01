@@ -7,6 +7,7 @@ import dev.vibeguard.api.finding.FindingRepository;
 import dev.vibeguard.api.finding.FindingSaver;
 import dev.vibeguard.api.finding.FindingType;
 import dev.vibeguard.api.finding.Severity;
+import dev.vibeguard.api.finding.Verdict;
 import dev.vibeguard.api.patch.Patch;
 import dev.vibeguard.api.patch.PatchRepository;
 import dev.vibeguard.api.patch.PatchSaver;
@@ -114,6 +115,12 @@ public class ScanEventHandler implements RunnerEventHandler {
             handleRegressionCheckDone(scanId, event);
         }
 
+        // A2(VERIFYING) DONE → verdict·권장 버전·판정 근거를 Finding에 반영한다.
+        if ("VERIFYING".equalsIgnoreCase(event.stage())
+                && "DONE".equalsIgnoreCase(event.status())) {
+            handleVerificationDone(scanId, event);
+        }
+
         // A4(PR_CREATING) DONE → Agent가 실제 생성한 PR 정보를 멱등 저장한다.
         if ("PR_CREATING".equalsIgnoreCase(event.stage())
                 && "DONE".equalsIgnoreCase(event.status())) {
@@ -146,6 +153,111 @@ public class ScanEventHandler implements RunnerEventHandler {
         Finding finding = buildFinding(scanId, event.payload());
         findingSaver.saveIgnoreDuplicate(finding);
         sseHub.broadcast(scanId, "finding", toPayload(event));
+    }
+
+    /**
+     * VERIFYING DONE의 A2 JSON을 CVE+패키지 Finding에 반영한다.
+     *
+     * <p>신규 출력의 verdict/recommendedVersion/rationale를 우선 사용하고,
+     * 기존 Runner 출력(id/withinMajor/fixesAll/patchCandidates)도 안전하게 수용한다.
+     */
+    @SuppressWarnings("unchecked")
+    private void handleVerificationDone(UUID scanId, RunnerEvent event) {
+        if (event.payload() == null) return;
+        Object raw = event.payload().get("stageOutput");
+        if (raw == null) {
+            log.debug("[scan-event] VERIFYING DONE stageOutput 없음 scanId={}", scanId);
+            return;
+        }
+
+        Map<String, Object> a2;
+        try {
+            a2 = objectMapper.readValue(stripMarkdownFences(raw.toString()),
+                new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.warn("[scan-event] VERIFYING stageOutput JSON 파싱 실패 scanId={}: {}", scanId, e.getMessage());
+            return;
+        }
+
+        Object verifiedRaw = a2.containsKey("verifiedFindings")
+            ? a2.get("verifiedFindings") : a2.get("verified");
+        List<Map<String, Object>> verified = verifiedRaw instanceof List<?> list
+            ? (List<Map<String, Object>>) list : List.of();
+        Object candidatesRaw = a2.get("patchCandidates");
+        List<Map<String, Object>> candidates = candidatesRaw instanceof List<?> list
+            ? (List<Map<String, Object>>) list : List.of();
+
+        Map<String, Map<String, Object>> candidateByPackage = new LinkedHashMap<>();
+        for (Map<String, Object> candidate : candidates) {
+            String packageName = str(candidate, "packageName");
+            if (packageName != null && !packageName.isBlank()) {
+                candidateByPackage.put(packageName, candidate);
+            }
+        }
+
+        int updated = 0;
+        List<Finding> findings = findingRepository.findAllByScanId(scanId);
+        for (Finding finding : findings) {
+            Map<String, Object> result = findVerificationResult(finding, verified);
+            Map<String, Object> candidate = candidateByPackage.get(finding.getPackageName());
+            if (result == null && candidate == null) continue;
+
+            String recommendedVersion = firstNonBlank(
+                str(result, "recommendedVersion"),
+                str(result, "withinMajor"),
+                str(result, "fixesAll"),
+                str(candidate, "recommendedVersion"),
+                str(candidate, "withinMajor"),
+                str(candidate, "fixesAll"));
+            Verdict verdict = parseVerdict(str(result, "verdict"));
+            if (verdict == null) {
+                verdict = recommendedVersion != null || candidate != null ? Verdict.PATCH : Verdict.MANUAL;
+            }
+
+            finding.setVerdict(verdict);
+            if (recommendedVersion != null) finding.setRecommendedVersion(recommendedVersion);
+            String rationale = str(result, "rationale");
+            if (rationale == null || rationale.isBlank()) {
+                rationale = verdict == Verdict.PATCH
+                    ? "공식 advisory 검증 결과 안전 버전으로 패치할 수 있습니다."
+                    : verdict == Verdict.IGNORE
+                        ? "공식 advisory 검증 결과 현재 버전은 영향 대상이 아닙니다."
+                        : "자동 패치 근거가 불충분해 수동 확인이 필요합니다.";
+            }
+            finding.setRationale(rationale);
+            updated++;
+        }
+        if (updated > 0) findingRepository.saveAll(findings);
+        log.info("[scan-event] VERIFYING 판정 반영 scanId={} updated={}", scanId, updated);
+    }
+
+    private Map<String, Object> findVerificationResult(
+            Finding finding, List<Map<String, Object>> verified) {
+        for (Map<String, Object> item : verified) {
+            String cveId = firstNonBlank(str(item, "cveId"), str(item, "findingId"), str(item, "id"));
+            String packageName = str(item, "packageName");
+            boolean cveMatches = cveId != null && cveId.equalsIgnoreCase(finding.getCveId());
+            boolean packageMatches = packageName == null
+                || packageName.equalsIgnoreCase(finding.getPackageName());
+            if (cveMatches && packageMatches) return item;
+        }
+        return null;
+    }
+
+    private Verdict parseVerdict(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        try {
+            return Verdict.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) return value;
+        }
+        return null;
     }
 
     /**
@@ -408,6 +520,7 @@ public class ScanEventHandler implements RunnerEventHandler {
     }
 
     private String str(Map<String, Object> m, String key) {
+        if (m == null) return null;
         Object v = m.get(key);
         return v == null ? null : v.toString();
     }

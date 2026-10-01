@@ -12,6 +12,9 @@ public interface FindingRepository extends JpaRepository<Finding, UUID> {
 
     Page<Finding> findByScanId(UUID scanId, Pageable pageable);
 
+    /** A2 검증 결과를 스캔의 모든 Finding에 반영할 때 사용. */
+    java.util.List<Finding> findAllByScanId(UUID scanId);
+
     /**
      * 스캔별 Finding 필터 조회. severity/type/status는 null이면 해당 조건 무시.
      * (nullable 필터를 JPQL의 (:param is null or ...) 관용구로 처리)
