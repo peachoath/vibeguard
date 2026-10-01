@@ -1,6 +1,7 @@
 package dev.vibeguard.api.dashboard;
 
 import dev.vibeguard.api.auth.CurrentUserService;
+import dev.vibeguard.api.user.User;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -23,7 +24,7 @@ public class DashboardController {
 
     @GetMapping("/summary")
     public ResponseEntity<SummaryDto> summary(@AuthenticationPrincipal OAuth2User principal) {
-        currentUserService.require(principal);
-        return ResponseEntity.ok(dashboardService.summary());
+        User user = currentUserService.require(principal);
+        return ResponseEntity.ok(dashboardService.summary(user.getId()));
     }
 }

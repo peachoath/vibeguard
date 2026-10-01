@@ -21,6 +21,8 @@ import dev.vibeguard.api.patch.TestOutcome;
 import dev.vibeguard.api.patch.TestPhase;
 import dev.vibeguard.api.patch.TestRun;
 import dev.vibeguard.api.patch.TestRunSaver;
+import dev.vibeguard.api.pr.PullRequest;
+import dev.vibeguard.api.pr.PullRequestRepository;
 import dev.vibeguard.api.runner.RunnerEvent;
 import dev.vibeguard.api.sse.SseHub;
 import java.util.HashMap;
@@ -48,6 +50,7 @@ class ScanEventHandlerTest {
     @Mock PatchRepository patchRepository;
     @Mock PatchSaver patchSaver;
     @Mock TestRunSaver testRunSaver;
+    @Mock PullRequestRepository pullRequestRepository;
     @Spy  ObjectMapper objectMapper;
 
     @InjectMocks ScanEventHandler handler;
@@ -284,6 +287,60 @@ class ScanEventHandlerTest {
         handler.handle(event);
 
         verify(testRunSaver, never()).saveIgnoreDuplicate(any());
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // PR_CREATING DONE — PullRequest 저장
+    // ──────────────────────────────────────────────────────────────────────
+
+    @Test
+    void PR_CREATING_DONE_PR_CREATED_PullRequest_저장() {
+        String stageOutput = """
+            {"outcome":"PR_CREATED",
+             "prUrl":"https://github.com/peachoath/vibeguard/pull/50",
+             "branch":"vibeguard/patch-test"}
+            """;
+        lenient().when(pullRequestRepository.findFirstByScanId(scanId))
+            .thenReturn(Optional.empty());
+
+        handler.handle(stageEvent("PR_CREATING", 4, "DONE",
+            Map.of("hasOutput", true, "stageOutput", stageOutput)));
+
+        ArgumentCaptor<PullRequest> captor = ArgumentCaptor.forClass(PullRequest.class);
+        verify(pullRequestRepository).save(captor.capture());
+        PullRequest saved = captor.getValue();
+        assertThat(saved.getScanId()).isEqualTo(scanId);
+        assertThat(saved.getGithubPrNumber()).isEqualTo(50);
+        assertThat(saved.getUrl()).isEqualTo("https://github.com/peachoath/vibeguard/pull/50");
+        assertThat(saved.getBranchName()).isEqualTo("vibeguard/patch-test");
+        assertThat(saved.getState()).isEqualTo("OPEN");
+    }
+
+    @Test
+    void PR_CREATING_DONE_중복_콜백은_기존_PullRequest_갱신() {
+        PullRequest existing = new PullRequest(scanId);
+        lenient().when(pullRequestRepository.findFirstByScanId(scanId))
+            .thenReturn(Optional.of(existing));
+        String stageOutput = """
+            {"outcome":"PR_CREATED",
+             "prUrl":"https://github.com/peachoath/vibeguard/pull/51",
+             "branch":"vibeguard/patch-retry"}
+            """;
+
+        handler.handle(stageEvent("PR_CREATING", 4, "DONE",
+            Map.of("hasOutput", true, "stageOutput", stageOutput)));
+
+        verify(pullRequestRepository).save(existing);
+        assertThat(existing.getGithubPrNumber()).isEqualTo(51);
+        assertThat(existing.getBranchName()).isEqualTo("vibeguard/patch-retry");
+    }
+
+    @Test
+    void PR_CREATING_DONE_SKIPPED면_PullRequest_저장_안함() {
+        handler.handle(stageEvent("PR_CREATING", 4, "DONE",
+            Map.of("hasOutput", true, "stageOutput", "{\"outcome\":\"SKIPPED\"}")));
+
+        verify(pullRequestRepository, never()).save(any());
     }
 
     // ──────────────────────────────────────────────────────────────────────

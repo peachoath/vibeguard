@@ -27,7 +27,7 @@ public class DashboardService {
     }
 
     @Transactional(readOnly = true)
-    public SummaryDto summary() {
+    public SummaryDto summary(java.util.UUID userId) {
         // 심각도 분포 (severity가 null인 Finding은 제외)
         Map<Severity, Long> distribution = new EnumMap<>(Severity.class);
         for (Severity s : Severity.values()) {
@@ -53,7 +53,7 @@ public class DashboardService {
         Long avgDurationMs = avg == null ? null : Math.round(avg);
 
         long totalScans = scanRepository.count();
-        long totalPrs = pullRequestRepository.count();
+        long totalPrs = pullRequestRepository.countByUserId(userId);
 
         return new SummaryDto(distribution, patchSuccessRate, avgDurationMs, totalScans, totalPrs);
     }
