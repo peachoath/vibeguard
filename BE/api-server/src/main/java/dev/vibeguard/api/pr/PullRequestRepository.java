@@ -19,4 +19,11 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, UUID> 
         + "join Repository r on r.id = s.repositoryId "
         + "where r.userId = :userId")
     long countByUserId(UUID userId);
+
+    /** GitHub 실제 PR과 URL 중복 제거하기 위한 사용자별 PR 목록. */
+    @Query("select pr from PullRequest pr "
+        + "join Scan s on s.id = pr.scanId "
+        + "join Repository r on r.id = s.repositoryId "
+        + "where r.userId = :userId")
+    List<PullRequest> findAllByUserId(UUID userId);
 }

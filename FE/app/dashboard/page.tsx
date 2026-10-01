@@ -9,6 +9,7 @@ import { EmptyState } from "../components/empty-state";
 import AppHeader from "../components/app-header";
 import ScreenContent from "../components/screen-content";
 import { useDashboardSummary, useRepositories, useScans, type ScanDto } from "@/lib/queries";
+import { scanStatusLabel, scanStatusTone } from "@/lib/scan-status";
 
 function formatDuration(ms: number | null): string {
   if (ms === null) return "-";
@@ -27,22 +28,6 @@ function regressionPassRate(scans: ScanDto[]): number {
   const blocked = scans.filter((s) => s.status === "REGRESSION_BLOCKED").length;
   const total = completed + blocked;
   return total === 0 ? 0 : Math.round((completed / total) * 100);
-}
-
-function statusTone(status: string): string {
-  if (status === "COMPLETED") return "complete";
-  if (status === "REGRESSION_BLOCKED") return "blocked";
-  if (status === "FAILED") return "failed";
-  return "untested";
-}
-
-function statusLabel(status: string): string {
-  if (status === "COMPLETED") return "완료";
-  if (status === "REGRESSION_BLOCKED") return "회귀 차단";
-  if (status === "FAILED") return "실패";
-  if (status === "QUEUED") return "대기 중";
-  if (status === "RUNNING") return "진행 중";
-  return status;
 }
 
 export default function DashboardPage() {
@@ -77,7 +62,7 @@ export default function DashboardPage() {
     const rows = recentScans.map((s) => [
       repoMap[s.repositoryId] ?? s.repositoryId,
       s.ref,
-      statusLabel(s.status),
+      scanStatusLabel(s.status),
       s.startedAt ? new Date(s.startedAt).toLocaleString("ko-KR") : "-",
     ].join(","));
     const csv = ["repository,branch,status,time", ...rows].join("\n");
@@ -193,7 +178,7 @@ export default function DashboardPage() {
                     <div className="recent-scan-row" key={scan.id}>
                       <strong>{repoMap[scan.repositoryId] ?? "…"}</strong>
                       <span>{scan.ref}</span>
-                      <b className={statusTone(scan.status)}>{statusLabel(scan.status)}</b>
+                      <b className={scanStatusTone(scan.status)}>{scanStatusLabel(scan.status)}</b>
                       <span>{scan.startedAt ? new Date(scan.startedAt).toLocaleString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-"}</span>
                     </div>
                   ))}

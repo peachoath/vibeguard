@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -28,8 +30,7 @@ public class GeneratedPullRequestCounter {
     private final UserRepository userRepository;
     private final GitHubClient gitHubClient;
     private final TokenCipher tokenCipher;
-    private volatile long cachedCount;
-    private volatile long cacheExpiresAt;
+    private final ConcurrentHashMap<UUID, CacheEntry> cacheByUser = new ConcurrentHashMap<>();
 
     public GeneratedPullRequestCounter(
             PullRequestRepository pullRequestRepository,
@@ -44,25 +45,27 @@ public class GeneratedPullRequestCounter {
         this.tokenCipher = tokenCipher;
     }
 
-    public long count() {
+    public long count(UUID userId) {
         long now = System.nanoTime();
-        if (now < cacheExpiresAt) {
-            return cachedCount;
+        CacheEntry cached = cacheByUser.get(userId);
+        if (cached != null && now < cached.expiresAt()) {
+            return cached.count();
         }
-        synchronized (this) {
-            if (now < cacheExpiresAt) {
-                return cachedCount;
+        synchronized (cacheByUser) {
+            cached = cacheByUser.get(userId);
+            if (cached != null && now < cached.expiresAt()) {
+                return cached.count();
             }
-            cachedCount = countFresh();
-            cacheExpiresAt = System.nanoTime() + CACHE_TTL_NANOS;
-            return cachedCount;
+            long count = countFresh(userId);
+            cacheByUser.put(userId, new CacheEntry(count, System.nanoTime() + CACHE_TTL_NANOS));
+            return count;
         }
     }
 
-    private long countFresh() {
+    private long countFresh(UUID userId) {
         Set<String> pullRequestUrls = new HashSet<>();
         long persistedWithoutUrl = 0;
-        for (PullRequest pullRequest : pullRequestRepository.findAll()) {
+        for (PullRequest pullRequest : pullRequestRepository.findAllByUserId(userId)) {
             if (pullRequest.getUrl() == null || pullRequest.getUrl().isBlank()) {
                 persistedWithoutUrl++;
             } else {
@@ -70,20 +73,22 @@ public class GeneratedPullRequestCounter {
             }
         }
 
-        Set<String> checkedRepositories = new HashSet<>();
         List<RepositoryAccess> repositoryAccesses = new ArrayList<>();
-        for (Repository repository : repositories.findAll()) {
-            if (!checkedRepositories.add(repository.getFullName())) {
-                continue;
+        String accessToken;
+        try {
+            var user = userRepository.findById(userId).orElse(null);
+            if (user == null) return pullRequestUrls.size() + persistedWithoutUrl;
+            accessToken = tokenCipher.decrypt(user.getAccessToken());
+        } catch (RuntimeException ex) {
+            log.warn("VibeGuard PR 토큰 복호화 실패 userId={}", userId);
+            return pullRequestUrls.size() + persistedWithoutUrl;
+        }
+
+        Set<String> checkedRepositories = new HashSet<>();
+        for (Repository repository : repositories.findByUserId(userId)) {
+            if (checkedRepositories.add(repository.getFullName())) {
+                repositoryAccesses.add(new RepositoryAccess(repository.getFullName(), accessToken));
             }
-            userRepository.findById(repository.getUserId()).ifPresent(user -> {
-                try {
-                    String accessToken = tokenCipher.decrypt(user.getAccessToken());
-                    repositoryAccesses.add(new RepositoryAccess(repository.getFullName(), accessToken));
-                } catch (RuntimeException ex) {
-                    log.warn("VibeGuard PR 토큰 복호화 실패 repository={}", repository.getFullName());
-                }
-            });
         }
 
         // 외부 GitHub 요청은 서로 독립적이므로 병렬 조회해 첫 대시보드 로딩을 단축한다.
@@ -106,5 +111,8 @@ public class GeneratedPullRequestCounter {
     }
 
     private record RepositoryAccess(String fullName, String accessToken) {
+    }
+
+    private record CacheEntry(long count, long expiresAt) {
     }
 }

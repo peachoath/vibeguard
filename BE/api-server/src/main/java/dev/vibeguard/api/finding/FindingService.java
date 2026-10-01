@@ -44,7 +44,8 @@ public class FindingService {
 
     @Transactional(readOnly = true)
     public FindingDetailDto detail(UUID findingId, UUID userId) {
-        return FindingDetailDto.from(requireForUser(findingId, userId));
+        Finding finding = requireForUser(findingId, userId);
+        return FindingDetailDto.from(finding, patchRepository.existsByFindingId(findingId));
     }
 
     /** 오탐 처리 — status를 IGNORED로. rationale에 사유를 병기(기록 보존). 소유권 검증 포함. */

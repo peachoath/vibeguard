@@ -33,9 +33,12 @@ public interface FindingRepository extends JpaRepository<Finding, UUID> {
         @Param("status") FindingStatus status,
         Pageable pageable);
 
-    /** 대시보드 심각도 분포 집계용. */
-    @Query("select f.severity, count(f) from Finding f group by f.severity")
-    java.util.List<Object[]> countBySeverity();
+    /** 현재 사용자가 연결한 저장소의 Finding 심각도 분포. */
+    @Query("select f.severity, count(f) from Finding f "
+        + "join Scan s on s.id = f.scanId "
+        + "join Repository r on r.id = s.repositoryId "
+        + "where r.userId = :userId group by f.severity")
+    java.util.List<Object[]> countBySeverityForUser(@Param("userId") UUID userId);
 
     /**
      * Finding 소유권 검증 조회 — IDOR 방지용.
