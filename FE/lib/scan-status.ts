@@ -23,7 +23,7 @@ const STATUS_LABELS: Record<string, string> = {
   REGRESSION_CHECK: "회귀 검증 중",
   PR_CREATING: "PR 생성 중",
   COMPLETED: "완료",
-  NO_FINDINGS: "발견 없음",
+  NO_FINDINGS: "자동 패치 없음",
   PATCH_FAILED: "패치 실패",
   REGRESSION_BLOCKED: "회귀 차단",
   FAILED: "검사 실패",
