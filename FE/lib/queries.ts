@@ -66,7 +66,7 @@ export interface FindingDto {
   packageName: string | null;
   currentVersion: string | null;
   recommendedVersion: string | null;
-  verdict: string;
+  verdict: string | null;
   status: string;
 }
 

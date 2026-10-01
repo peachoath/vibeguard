@@ -352,7 +352,7 @@ a { color: inherit; text-decoration: none; }
 .repositories-heading h1 { margin: 2px 0 3px; font-size: 28px; letter-spacing: -1px; line-height: 1.15; font-weight: 900; font-variation-settings: "wght" 900; }
 .repositories-heading p { margin: 0; color: #747f90; font-size: 15px; }
 .heading-buttons { display: flex; gap: 16px; padding-top: 16px; }
-.heading-buttons button { height: 40px; padding: 0 26px; border: 1px solid #e0e7f0; border-radius: 17px; background: #fbfcfe; box-shadow: 0 5px 13px rgba(31, 66, 110, .08); color: var(--ink); font-size: 15px; font-weight: 700; cursor: pointer; }
+.heading-buttons button { height: 40px; padding: 0 26px; border: 1px solid #e0e7f0; border-radius: 17px; background: #fbfcfe; box-shadow: 0 5px 13px rgba(31, 66, 110, .08); color: var(--ink); font-size: 15px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
 
 .repository-layout { display: grid; grid-template-columns: minmax(0, 1010px) minmax(360px, 432px); gap: 16px; }
 .repository-main { min-width: 0; }
@@ -674,7 +674,7 @@ a { color: inherit; text-decoration: none; }
 .finding-verdict, .finding-regression { min-width: 96px; height: 28px; padding: 0 12px; border-radius: 999px; display: inline-grid; place-items: center; font-size: 11px; font-weight: 800; }
 .finding-verdict.patch, .finding-regression.pass { background: #e4f7ef; color: #07966d; }
 .finding-verdict.manual, .finding-regression.manual { background: #fff0db; color: #ef8a00; }
-.finding-verdict.ignore, .finding-regression.neutral { background: #f4f7fb; color: #65758a; }
+.finding-verdict.ignore, .finding-verdict.neutral, .finding-regression.neutral { background: #f4f7fb; color: #65758a; }
 .finding-regression.waiting { background: #e7f1ff; color: #2b7df2; }
 .finding-detail-link { width: 126px; height: 35px; border: 1px solid #dce4ee; border-radius: 18px; background: #fff; color: var(--ink); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; cursor: pointer; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
 .finding-detail-link:hover { background: #f5f8ff; border-color: #c2d4ee; transform: translateY(-1px); }

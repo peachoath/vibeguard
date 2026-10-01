@@ -25,6 +25,17 @@ const VERDICT_LABELS: Record<string, string> = {
   MANUAL: "수동 확인",
 };
 
+/** verdict가 null/미지정일 수 있어(아직 판정 안 된 OPEN finding) 안전하게 처리. */
+function verdictClass(v: string | null | undefined): string {
+  if (v === "PATCH") return "patch";
+  if (v === "MANUAL") return "manual";
+  if (v === "IGNORE") return "ignore";
+  return "neutral";
+}
+function verdictLabel(v: string | null | undefined): string {
+  return (v && VERDICT_LABELS[v]) || "미판정";
+}
+
 function ResultsContent() {
   const params = useSearchParams();
   const scanId = params.get("scanId");
@@ -182,8 +193,8 @@ function ResultsContent() {
                         </td>
                         <td><span className={`severity-badge ${item.severity.toLowerCase()}`}>{SEVERITY_LABELS[item.severity] ?? item.severity}</span></td>
                         <td>
-                          <span className={`finding-verdict ${item.verdict === "MANUAL" ? "manual" : item.verdict === "IGNORE" ? "ignore" : "patch"}`}>
-                            {VERDICT_LABELS[item.verdict] ?? item.verdict}
+                          <span className={`finding-verdict ${verdictClass(item.verdict)}`}>
+                            {verdictLabel(item.verdict)}
                           </span>
                         </td>
                         <td><span className={`finding-regression ${item.status.toLowerCase()}`}>{item.status}</span></td>
