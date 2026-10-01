@@ -20,6 +20,7 @@ import dev.vibeguard.api.finding.FindingRepository;
 import dev.vibeguard.api.patch.PatchRepository;
 import dev.vibeguard.api.patch.TestPhase;
 import dev.vibeguard.api.patch.TestRunRepository;
+import dev.vibeguard.api.pr.PullRequestRepository;
 import dev.vibeguard.api.repository.Repositories;
 import dev.vibeguard.api.repository.Repository;
 import dev.vibeguard.api.runner.HmacSigner;
@@ -75,6 +76,7 @@ class ScanPipelineE2eTest {
     @Autowired FindingRepository findingRepository;
     @Autowired PatchRepository patchRepository;
     @Autowired TestRunRepository testRunRepository;
+    @Autowired PullRequestRepository pullRequestRepository;
 
     /** RunnerClient를 교체 — 실제 Node 런너 HTTP 호출 방지. */
     @MockitoBean RunnerClient runnerClient;
@@ -96,6 +98,7 @@ class ScanPipelineE2eTest {
         testRunRepository.deleteAll();
         patchRepository.deleteAll();
         findingRepository.deleteAll();
+        pullRequestRepository.deleteAll();
         scanRepository.deleteAll();
         repositories.deleteAll();
         userRepository.deleteAll();
@@ -360,6 +363,35 @@ class ScanPipelineE2eTest {
         // TestRun은 PRE_PATCH·POST_PATCH 각 1건씩만 존재해야 함
         var testRuns = testRunRepository.findByScanIdAndUserId(scanId, testUser.getId());
         assertThat(testRuns).hasSize(2);
+    }
+
+    @Test
+    void PR_CREATING_DONE_PullRequest_저장_및_대시보드_집계() throws Exception {
+        UUID scanId = createScan("main");
+        String stageOutput = objectMapper.writeValueAsString(Map.of(
+            "outcome", "PR_CREATED",
+            "prUrl", "https://github.com/testuser/sample-repo/pull/42",
+            "branch", "vibeguard/patch-" + scanId));
+
+        Map<String, Object> event = Map.of(
+            "scanId", scanId.toString(), "kind", "stage",
+            "stage", "PR_CREATING", "agent", 4, "status", "DONE",
+            "payload", Map.of("hasOutput", true, "stageOutput", stageOutput));
+
+        // Runner 재시도에도 같은 scan의 PR은 한 건만 유지한다.
+        sendCallback(event);
+        sendCallback(event);
+
+        assertThat(pullRequestRepository.findByScanId(scanId))
+            .singleElement()
+            .satisfies(pr -> {
+                assertThat(pr.getGithubPrNumber()).isEqualTo(42);
+                assertThat(pr.getState()).isEqualTo("OPEN");
+            });
+
+        mvc.perform(get("/api/v1/dashboard/summary").with(oauth2Login()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalPrs").value(1));
     }
 
     // ──────────────────────────────────────────────────────────────────────
